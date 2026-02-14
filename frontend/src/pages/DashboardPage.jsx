@@ -67,6 +67,7 @@ export default function DashboardPage() {
           <Route path="heatmap" element={<HeatmapSection />} />
           <Route path="importar" element={<ImportSection />} />
           <Route path="orcamento" element={<BudgetSection />} />
+          <Route path="simulador" element={<SimuladorSection />} />
           <Route path="relatorios" element={<ReportsSection />} />
           <Route path="metas" element={<MetasSection />} />
           <Route path="configuracoes" element={<SettingsSection />} />
