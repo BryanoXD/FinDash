@@ -15,6 +15,8 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  PiggyBank,
+  Calculator,
 } from "lucide-react";
 
 const menuItems = [
@@ -22,7 +24,9 @@ const menuItems = [
   { id: "receitas", label: "Receitas", icon: TrendingUpIcon, path: "/dashboard/receitas" },
   { id: "despesas", label: "Despesas", icon: TrendingDown, path: "/dashboard/despesas" },
   { id: "categorias", label: "Categorias", icon: Tag, path: "/dashboard/categorias" },
+  { id: "orcamento", label: "Orçamento", icon: PiggyBank, path: "/dashboard/orcamento" },
   { id: "investments", label: "Investimentos", icon: LineChart, path: "/dashboard/investimentos" },
+  { id: "simulador", label: "Simulador", icon: Calculator, path: "/dashboard/simulador" },
   { id: "accounts", label: "Contas e Cartões", icon: Landmark, path: "/dashboard/contas-cartoes" },
   { id: "heatmap", label: "Heatmap de Gastos", icon: Grid3X3, path: "/dashboard/heatmap" },
   { id: "import", label: "Importar Extratos", icon: Upload, path: "/dashboard/importar" },
