@@ -17,6 +17,7 @@ import {
   ImportSection,
   SettingsSection,
 } from "./sections/OtherSections";
+import { SimuladorSection } from "./sections/InvestmentsSection";
 
 export default function DashboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
