@@ -2,11 +2,15 @@ import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
-  ArrowLeftRight,
-  PieChart,
-  TrendingUp,
-  CreditCard,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown,
+  Tag,
+  LineChart,
+  Landmark,
+  Grid3X3,
+  Upload,
   FileText,
+  Target,
   Settings,
   LogOut,
   ChevronLeft,
@@ -14,12 +18,16 @@ import {
 } from "lucide-react";
 
 const menuItems = [
-  { id: "dashboard", label: "Visão Geral", icon: LayoutDashboard, path: "/dashboard" },
-  { id: "transactions", label: "Transações", icon: ArrowLeftRight, path: "/dashboard/transacoes" },
-  { id: "budget", label: "Orçamento", icon: PieChart, path: "/dashboard/orcamento" },
-  { id: "investments", label: "Investimentos", icon: TrendingUp, path: "/dashboard/investimentos" },
-  { id: "cards", label: "Cartões", icon: CreditCard, path: "/dashboard/cartoes" },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+  { id: "receitas", label: "Receitas", icon: TrendingUpIcon, path: "/dashboard/receitas" },
+  { id: "despesas", label: "Despesas", icon: TrendingDown, path: "/dashboard/despesas" },
+  { id: "categorias", label: "Categorias", icon: Tag, path: "/dashboard/categorias" },
+  { id: "investments", label: "Investimentos", icon: LineChart, path: "/dashboard/investimentos" },
+  { id: "accounts", label: "Contas e Cartões", icon: Landmark, path: "/dashboard/contas-cartoes" },
+  { id: "heatmap", label: "Heatmap de Gastos", icon: Grid3X3, path: "/dashboard/heatmap" },
+  { id: "import", label: "Importar Extratos", icon: Upload, path: "/dashboard/importar" },
   { id: "reports", label: "Relatórios", icon: FileText, path: "/dashboard/relatorios" },
+  { id: "goals", label: "Metas", icon: Target, path: "/dashboard/metas" },
 ];
 
 const bottomItems = [
