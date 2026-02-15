@@ -1,17 +1,23 @@
 """
 FinDash Backend API Server
 """
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import uuid
+import httpx
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 # Import routes
 from routes import auth, categories, tags, transactions, accounts, cards, investments, financings, budgets, goals
-from routes.auth import get_current_user_id
+from routes.auth import get_current_user_id, EMERGENT_AUTH_URL
+from models import User, UserSession
+from seed import seed_user_data
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
