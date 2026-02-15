@@ -123,8 +123,9 @@ async def auth_session(request: Request):
     from routes.auth import create_session
     response = JSONResponse(content={})
     result = await create_session(request, response, db=db)
-    # Merge cookies from the function
-    return result
+    # Return response with cookies set
+    response.body = response.render(result)
+    return response
 
 
 @app.get("/api/auth/me")
