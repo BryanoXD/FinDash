@@ -49,10 +49,9 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags 
   );
 }
 
-function TxPage({ initData, tipo }) {
-  const [tx, setTx] = useState(initData);
-  const [cats] = useState(initCats);
-  const [tags] = useState(initTags);
+function TxPage({ tipo }) {
+  const { transactions, categories, tags, createTransaction, updateTransaction, deleteTransaction } = useData();
+  const tx = useMemo(() => transactions.filter(t => t.tipo === tipo), [transactions, tipo]);
   const [modalOpen, setMO] = useState(false);
   const [editItem, setEI] = useState(null);
   const [search, setSearch] = useState("");
@@ -61,14 +60,15 @@ function TxPage({ initData, tipo }) {
   const color = tipo === "receita" ? "emerald" : "red";
   const filtered = useMemo(() => tx.filter(t => { if (search && !t.descricao.toLowerCase().includes(search.toLowerCase())) return false; if (catF && t.categoria !== catF) return false; return true; }), [tx, search, catF]);
   const total = filtered.reduce((a, b) => a + b.valor, 0);
-  const save = (item) => { if (item.id) setTx(p => p.map(t => t.id === item.id ? item : t)); else setTx(p => [...p, { ...item, id: Date.now() }]); setEI(null); };
+  const save = async (item) => { try { if (item.id) await updateTransaction(item.id, item); else await createTransaction(item); setEI(null); } catch (e) { console.error(e); } };
+  const handleDelete = async (id) => { try { await deleteTransaction(id); } catch (e) { console.error(e); } };
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div><h1 className="text-white text-2xl font-bold">{tipo === "receita" ? "Receitas" : "Despesas"}</h1><p className="text-white/40 text-sm mt-1">Gerencie suas {tipo === "receita" ? "receitas" : "despesas"}</p></div>
         <Btn onClick={() => { setEI(null); setMO(true); }}><Plus className="w-4 h-4 inline mr-1" />{tipo === "receita" ? "Nova Receita" : "Nova Despesa"}</Btn>
       </div>
-      <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-4 mb-4"><div className="flex flex-wrap gap-3"><div className="relative flex-1 min-w-[200px]"><Search className="w-4 h-4 text-white/30 absolute left-3 top-1/2 -translate-y-1/2" /><Inp placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="!pl-10" /></div><Sel value={catF} onChange={e => setCatF(e.target.value)} className="!w-auto min-w-[180px]"><option value="">Todas categorias</option>{cats.filter(c => c.tipo === tipo || c.tipo === "ambos").map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}</Sel></div></div>
+      <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-4 mb-4"><div className="flex flex-wrap gap-3"><div className="relative flex-1 min-w-[200px]"><Search className="w-4 h-4 text-white/30 absolute left-3 top-1/2 -translate-y-1/2" /><Inp placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="!pl-10" /></div><Sel value={catF} onChange={e => setCatF(e.target.value)} className="!w-auto min-w-[180px]"><option value="">Todas categorias</option>{categories.filter(c => c.tipo === tipo || c.tipo === "ambos").map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}</Sel></div></div>
       <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-4 mb-4 flex justify-between items-center"><span className="text-white/50 text-sm">{filtered.length} transações</span><span className={`font-semibold ${tipo === "receita" ? "text-emerald-400" : "text-red-400"}`}>Total: {fmt(total)}</span></div>
       <div className="bg-[#111111] border border-white/[0.06] rounded-xl overflow-hidden">
         <div className="grid grid-cols-[100px_1fr_140px_130px_80px] gap-2 px-5 py-3 border-b border-white/[0.04] text-white/30 text-xs font-medium"><span>Data</span><span>Descrição</span><span>Categoria</span><span>Valor</span><span>Ações</span></div>
@@ -76,20 +76,20 @@ function TxPage({ initData, tipo }) {
           <div className="grid grid-cols-[100px_1fr_140px_130px_80px] gap-2 px-5 py-3.5 items-center hover:bg-white/[0.02] transition-colors border-b border-white/[0.03]">
             <span className="text-white/40 text-xs">{new Date(t.data).toLocaleDateString("pt-BR")}</span>
             <div><p className="text-white text-sm font-medium">{t.descricao}</p><div className="flex items-center gap-1.5 mt-1 flex-wrap">{t.metodo && <span className="text-white/25 text-xs">{t.metodo}</span>}{t.recorrente && <RotateCcw className="w-3 h-3 text-blue-400/50" />}{t.pago ? <Check className="w-3 h-3 text-emerald-400/50" /> : <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">Pendente</span>}{t.detalhado && t.itens?.length > 0 && <button onClick={() => setExpId(expId === t.id ? null : t.id)} className="text-white/30 hover:text-white/60"><ChevronDown className={`w-3 h-3 transition-transform ${expId === t.id ? "rotate-180" : ""}`} /></button>}{t.tags?.map(tid => { const tg = tags.find(x => x.id === tid); return tg ? <span key={tid} className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: tg.cor + "20", color: tg.cor }}>{tg.nome}</span> : null; })}</div></div>
-            <span className="text-xs px-2 py-1 rounded-md border inline-block w-fit" style={{ borderColor: (cats.find(c => c.nome === t.categoria)?.cor || "#fff") + "40", color: cats.find(c => c.nome === t.categoria)?.cor || "#fff" }}>{t.categoria}</span>
+            <span className="text-xs px-2 py-1 rounded-md border inline-block w-fit" style={{ borderColor: (categories.find(c => c.nome === t.categoria)?.cor || "#fff") + "40", color: categories.find(c => c.nome === t.categoria)?.cor || "#fff" }}>{t.categoria}</span>
             <span className={`text-sm font-semibold ${tipo === "receita" ? "text-emerald-400" : "text-red-400"}`}>{tipo === "receita" ? "+" : "-"}{fmt(t.valor)}</span>
-            <div className="flex gap-2"><button onClick={() => { setEI(t); setMO(true); }} className="text-white/30 hover:text-white/60"><Pencil className="w-3.5 h-3.5" /></button><button onClick={() => setTx(p => p.filter(x => x.id !== t.id))} className="text-red-400/40 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button></div>
+            <div className="flex gap-2"><button onClick={() => { setEI(t); setMO(true); }} className="text-white/30 hover:text-white/60"><Pencil className="w-3.5 h-3.5" /></button><button onClick={() => handleDelete(t.id)} className="text-red-400/40 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button></div>
           </div>
           {expId === t.id && t.itens?.length > 0 && (<div className="px-8 py-3 bg-white/[0.01] border-b border-white/[0.03]">{t.itens.map((it, i) => (<div key={i} className="flex justify-between py-1"><span className="text-white/40 text-xs">{it.nome}</span><span className="text-white/60 text-xs">{fmt(it.valor)}</span></div>))}</div>)}
         </div>))}
       </div>
-      <TransactionModal open={modalOpen} onClose={() => { setMO(false); setEI(null); }} onSave={save} item={editItem} tipo={tipo} categories={cats} tags={tags} />
+      <TransactionModal open={modalOpen} onClose={() => { setMO(false); setEI(null); }} onSave={save} item={editItem} tipo={tipo} categories={categories} tags={tags} />
     </div>
   );
 }
 
-export function ReceitasSection() { return <TxPage initData={initTx.filter(t => t.tipo === "receita")} tipo="receita" />; }
-export function DespesasSection() { return <TxPage initData={initTx.filter(t => t.tipo === "despesa")} tipo="despesa" />; }
+export function ReceitasSection() { return <TxPage tipo="receita" />; }
+export function DespesasSection() { return <TxPage tipo="despesa" />; }
 
 export function CategoriasSection() {
   const [cats, setCats] = useState(initCats);
