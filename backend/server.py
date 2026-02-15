@@ -74,19 +74,6 @@ def create_protected_wrapper(original_func, needs_user_id=True):
     return wrapper
 
 
-# Include routers with /api prefix
-app.include_router(auth.router, prefix="/api")
-app.include_router(categories.router, prefix="/api")
-app.include_router(tags.router, prefix="/api")
-app.include_router(transactions.router, prefix="/api")
-app.include_router(accounts.router, prefix="/api")
-app.include_router(cards.router, prefix="/api")
-app.include_router(investments.router, prefix="/api")
-app.include_router(financings.router, prefix="/api")
-app.include_router(budgets.router, prefix="/api")
-app.include_router(goals.router, prefix="/api")
-
-
 # Override route handlers with db/user_id injection
 @app.on_event("startup")
 async def startup_event():
