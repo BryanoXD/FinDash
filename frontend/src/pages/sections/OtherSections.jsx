@@ -92,31 +92,33 @@ export function ReceitasSection() { return <TxPage tipo="receita" />; }
 export function DespesasSection() { return <TxPage tipo="despesa" />; }
 
 export function CategoriasSection() {
-  const [cats, setCats] = useState(initCats);
+  const { categories, createCategory, updateCategory, deleteCategory } = useData();
   const [modalOpen, setMO] = useState(false);
   const [editCat, setEC] = useState(null);
   const [form, setForm] = useState({ nome: "", cor: "#6366f1", tipo: "despesa" });
   React.useEffect(() => { if (editCat) setForm({ nome: editCat.nome, cor: editCat.cor, tipo: editCat.tipo }); else setForm({ nome: "", cor: "#6366f1", tipo: "despesa" }); }, [editCat, modalOpen]);
-  const save = () => { if (!form.nome) return; if (editCat) setCats(p => p.map(c => c.id === editCat.id ? { ...c, ...form } : c)); else setCats(p => [...p, { ...form, id: Date.now() }]); setMO(false); setEC(null); };
+  const save = async () => { if (!form.nome) return; try { if (editCat) await updateCategory(editCat.id, form); else await createCategory(form); setMO(false); setEC(null); } catch (e) { console.error(e); } };
+  const handleDelete = async (id) => { try { await deleteCategory(id); } catch (e) { console.error(e); } };
   const colors = ["#6366f1","#8b5cf6","#a78bfa","#22c55e","#ef4444","#f97316","#3b82f6","#ec4899","#14b8a6","#64748b"];
   return (
     <div>
       <div className="flex items-center justify-between mb-6"><div><h1 className="text-white text-2xl font-bold">Categorias</h1><p className="text-white/40 text-sm mt-1">Gerencie suas categorias</p></div><Btn onClick={() => { setEC(null); setMO(true); }}><Plus className="w-4 h-4 inline mr-1" />Nova Categoria</Btn></div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{cats.map(cat => (<div key={cat.id} className="bg-[#111111] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] transition-all"><div className="flex items-center justify-between mb-3"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: cat.cor + "20" }}><div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.cor }} /></div><span className="text-white font-medium">{cat.nome}</span></div><div className="flex gap-2"><button onClick={() => { setEC(cat); setMO(true); }} className="text-white/30 hover:text-white/60"><Pencil className="w-3.5 h-3.5" /></button><button onClick={() => setCats(p => p.filter(c => c.id !== cat.id))} className="text-red-400/40 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button></div></div><span className={`text-[10px] px-2 py-1 rounded-md ${cat.tipo === "receita" ? "bg-emerald-500/15 text-emerald-400" : cat.tipo === "despesa" ? "bg-red-500/15 text-red-400" : "bg-blue-500/15 text-blue-400"}`}>{cat.tipo === "receita" ? "Receita" : cat.tipo === "despesa" ? "Despesa" : "Ambos"}</span></div>))}</div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{categories.map(cat => (<div key={cat.id} className="bg-[#111111] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] transition-all"><div className="flex items-center justify-between mb-3"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: cat.cor + "20" }}><div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.cor }} /></div><span className="text-white font-medium">{cat.nome}</span></div><div className="flex gap-2"><button onClick={() => { setEC(cat); setMO(true); }} className="text-white/30 hover:text-white/60"><Pencil className="w-3.5 h-3.5" /></button><button onClick={() => handleDelete(cat.id)} className="text-red-400/40 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button></div></div><span className={`text-[10px] px-2 py-1 rounded-md ${cat.tipo === "receita" ? "bg-emerald-500/15 text-emerald-400" : cat.tipo === "despesa" ? "bg-red-500/15 text-red-400" : "bg-blue-500/15 text-blue-400"}`}>{cat.tipo === "receita" ? "Receita" : cat.tipo === "despesa" ? "Despesa" : "Ambos"}</span></div>))}</div>
       <Dialog open={modalOpen} onOpenChange={() => { setMO(false); setEC(null); }}><DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-md"><DialogHeader><DialogTitle className="text-white">{editCat ? "Editar" : "Nova"} Categoria</DialogTitle></DialogHeader><div className="space-y-4 py-2"><Field label="Nome" required><Inp placeholder="Nome da categoria" value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} /></Field><Field label="Tipo" required><Sel value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})}><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="ambos">Ambos</option></Sel></Field><Field label="Cor"><div className="flex gap-2 flex-wrap">{colors.map(c => (<button key={c} onClick={() => setForm({...form, cor: c})} className={`w-8 h-8 rounded-lg transition-all ${form.cor === c ? "ring-2 ring-white ring-offset-2 ring-offset-[#111111]" : ""}`} style={{ backgroundColor: c }} />))}</div></Field></div><DialogFooter className="gap-2"><Btn variant="secondary" onClick={() => { setMO(false); setEC(null); }}>Cancelar</Btn><Btn onClick={save}>{editCat ? "Salvar" : "Criar"}</Btn></DialogFooter></DialogContent></Dialog>
     </div>
   );
 }
 
 export function BudgetSection() {
-  const [budgets, setB] = useState(initBudgets);
-  const [cats] = useState(initCats);
+  const { budgets, categories, createBudget, updateBudget, deleteBudget } = useData();
   const [modalOpen, setMO] = useState(false);
   const [editB, setEB] = useState(null);
-  const [form, setForm] = useState({ categoriaId: "", limite: "" });
-  React.useEffect(() => { if (editB) setForm({ categoriaId: editB.categoriaId, limite: editB.limite }); else setForm({ categoriaId: "", limite: "" }); }, [editB, modalOpen]);
+  const [form, setForm] = useState({ categoria_id: "", limite: "" });
+  React.useEffect(() => { if (editB) setForm({ categoria_id: editB.categoria_id, limite: editB.limite }); else setForm({ categoria_id: "", limite: "" }); }, [editB, modalOpen]);
   const tL = budgets.reduce((a, b) => a + b.limite, 0); const tG = budgets.reduce((a, b) => a + b.gasto, 0);
-  const save = () => { if (!form.categoriaId || !form.limite) return; const cat = cats.find(c => c.id === Number(form.categoriaId)); if (editB) setB(p => p.map(b => b.id === editB.id ? { ...b, categoriaId: Number(form.categoriaId), categoria: cat?.nome, limite: Number(form.limite) } : b)); else setB(p => [...p, { id: Date.now(), categoriaId: Number(form.categoriaId), categoria: cat?.nome, limite: Number(form.limite), gasto: 0 }]); setMO(false); setEB(null); };
+  const save = async () => { if (!form.categoria_id || !form.limite) return; try { if (editB) await updateBudget(editB.id, { categoria_id: form.categoria_id, limite: Number(form.limite) }); else await createBudget({ categoria_id: form.categoria_id, limite: Number(form.limite) }); setMO(false); setEB(null); } catch (e) { console.error(e); } };
+  const handleDelete = async (id) => { try { await deleteBudget(id); } catch (e) { console.error(e); } };
+  const cats = categories;
   return (
     <div>
       <div className="flex items-center justify-between mb-6"><div><h1 className="text-white text-2xl font-bold">Orçamento</h1><p className="text-white/40 text-sm mt-1">Defina limites de gastos por categoria</p></div><Btn onClick={() => { setEB(null); setMO(true); }}><Plus className="w-4 h-4 inline mr-1" />Novo Orçamento</Btn></div>
