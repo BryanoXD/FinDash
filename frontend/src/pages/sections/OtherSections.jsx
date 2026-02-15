@@ -1,8 +1,5 @@
 import React, { useState, useMemo } from "react";
-import {
-  mockUser, mockTransactions as initTx, mockCategories as initCats, mockTags as initTags,
-  mockBudgets as initBudgets, mockFinancialGoals as initGoals,
-} from "../../data/mockData";
+import { useData } from "../../context/DataContext";
 import {
   Plus, Pencil, Trash2, X, Search, Download, Calendar, PieChart,
   BarChart3, Target, ChevronDown, RotateCcw, Check, Info,
