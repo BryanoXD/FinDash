@@ -235,6 +235,12 @@ async def get_transaction_summary(request: Request):
     return await transactions.get_transaction_summary(request, db=db, user_id=user_id)
 
 
+@app.patch("/api/transactions/{transaction_id}/toggle-paid")
+async def toggle_transaction_paid(transaction_id: str, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await transactions.toggle_transaction_paid(transaction_id, request, db=db, user_id=user_id)
+
+
 # ============== ACCOUNTS ROUTES ==============
 @app.get("/api/accounts")
 async def get_accounts(request: Request):
