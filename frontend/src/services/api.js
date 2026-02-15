@@ -19,8 +19,6 @@ async function apiCall(endpoint, options = {}) {
   const response = await fetch(url, { ...defaultOptions, ...options });
   
   if (response.status === 401) {
-    // Redirect to login if unauthorized
-    window.location.href = '/';
     throw new Error('Unauthorized');
   }
   
