@@ -15,13 +15,13 @@ const Sel = ({ children, ...rest }) => (<select {...rest} className={`w-full bg-
 const Btn = ({ children, variant = "primary", ...rest }) => (<button {...rest} className={`text-sm font-medium px-4 py-2.5 rounded-lg transition-colors ${variant === "primary" ? "bg-white text-black hover:bg-gray-100" : "text-white/40 border border-white/[0.08] hover:bg-white/[0.04]"}`}>{children}</button>);
 
 function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags }) {
-  const [form, setForm] = useState({ valor: "", data: new Date().toISOString().split("T")[0], categoriaId: "", descricao: "", metodo: "", tags: [], recorrente: false, pago: true, detalhado: false, itens: [] });
+  const [form, setForm] = useState({ valor: "", data: new Date().toISOString().split("T")[0], categoria_id: "", descricao: "", metodo: "", tags: [], recorrente: false, pago: true, detalhado: false, itens: [] });
   const [newItem, setNewItem] = useState({ nome: "", valor: "" });
-  React.useEffect(() => { if (item) setForm(item); else setForm({ valor: "", data: new Date().toISOString().split("T")[0], categoriaId: "", descricao: "", metodo: "", tags: [], recorrente: false, pago: true, detalhado: false, itens: [] }); }, [item, open]);
+  React.useEffect(() => { if (item) setForm({ ...item, categoria_id: item.categoria_id || "" }); else setForm({ valor: "", data: new Date().toISOString().split("T")[0], categoria_id: "", descricao: "", metodo: "", tags: [], recorrente: false, pago: true, detalhado: false, itens: [] }); }, [item, open]);
   const toggleTag = (id) => setForm(f => ({ ...f, tags: f.tags.includes(id) ? f.tags.filter(t => t !== id) : [...f.tags, id] }));
   const addItem = () => { if (newItem.nome && newItem.valor) { setForm(f => ({ ...f, itens: [...f.itens, { nome: newItem.nome, valor: Number(newItem.valor) }] })); setNewItem({ nome: "", valor: "" }); } };
   const removeItem = (i) => setForm(f => ({ ...f, itens: f.itens.filter((_, idx) => idx !== i) }));
-  const handleSave = () => { if (!form.valor || !form.descricao || !form.categoriaId) return; const cat = categories.find(c => c.id === Number(form.categoriaId)); onSave({ ...form, valor: Number(form.valor), categoriaId: Number(form.categoriaId), categoria: cat?.nome || "", tipo }); onClose(); };
+  const handleSave = () => { if (!form.valor || !form.descricao || !form.categoria_id) return; onSave({ ...form, valor: Number(form.valor), tipo }); onClose(); };
   const filteredCats = categories.filter(c => c.tipo === tipo || c.tipo === "ambos");
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -32,7 +32,7 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags 
             <Field label="Valor" required><Inp type="number" step="0.01" placeholder="0,00" value={form.valor} onChange={e => setForm({...form, valor: e.target.value})} /></Field>
             <Field label="Data" required><Inp type="date" value={form.data} onChange={e => setForm({...form, data: e.target.value})} className="[color-scheme:dark]" /></Field>
           </div>
-          <Field label="Categoria" required><Sel value={form.categoriaId} onChange={e => setForm({...form, categoriaId: e.target.value})}><option value="">Selecione uma categoria</option>{filteredCats.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</Sel></Field>
+          <Field label="Categoria" required><Sel value={form.categoria_id} onChange={e => setForm({...form, categoria_id: e.target.value})}><option value="">Selecione uma categoria</option>{filteredCats.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</Sel></Field>
           <Field label="Descrição" required><Inp placeholder="Descreva a transação" value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} /></Field>
           <Field label={tipo === "receita" ? "Método de Recebimento" : "Método de Pagamento"}><Sel value={form.metodo} onChange={e => setForm({...form, metodo: e.target.value})}><option value="">Selecione (opcional)</option>{["Pix","Transfer","Débito","Crédito","Dinheiro","Boleto"].map(m => <option key={m} value={m}>{m}</option>)}</Sel></Field>
           <Field label="Tags"><div className="flex flex-wrap gap-2">{tags.map(t => (<button key={t.id} type="button" onClick={() => toggleTag(t.id)} className={`text-xs px-2.5 py-1.5 rounded-md border transition-colors ${form.tags.includes(t.id) ? "border-white/30 text-white" : "border-white/[0.08] text-white/40"}`} style={form.tags.includes(t.id) ? { backgroundColor: t.cor + "20", borderColor: t.cor + "60" } : {}}>{t.nome}</button>))}</div></Field>
