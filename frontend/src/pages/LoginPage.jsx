@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { LayoutDashboard } from "lucide-react";
+import { authAPI } from "../services/api";
 
 const BG_IMAGE = "https://images.unsplash.com/photo-1637241836936-e2b6b21553fa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwyfHxtZXRhbGxpYyUyMHBhbmVsc3xlbnwwfHx8YmxhY2t8MTc3MTA0Njk5M3ww&ixlib=rb-4.1.0&q=85&w=1920";
 
@@ -16,19 +17,41 @@ const GoogleIcon = () => (
 export default function LoginPage() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check if already authenticated
+  useEffect(() => {
+    const checkExistingAuth = async () => {
+      try {
+        await authAPI.getMe();
+        // Already authenticated, redirect to dashboard
+        navigate("/dashboard", { replace: true });
+      } catch (error) {
+        // Not authenticated, show login
+        setIsCheckingAuth(false);
+      }
+    };
+    checkExistingAuth();
+  }, [navigate]);
 
   const handleGoogleLogin = () => {
     setIsLoading(true);
-    // Mock login - simulate delay then redirect
-    setTimeout(() => {
-      localStorage.setItem("findash_auth", "true");
-      localStorage.setItem("findash_user", JSON.stringify({
-        name: "Carlos Silva",
-        email: "carlos.silva@email.com",
-      }));
-      navigate("/dashboard");
-    }, 800);
+    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+    const redirectUrl = window.location.origin + '/dashboard';
+    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
   };
+
+  // Show loading while checking auth
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white/60 text-sm">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex bg-[#0a0a0a]">
@@ -94,7 +117,7 @@ export default function LoginPage() {
             ) : (
               <GoogleIcon />
             )}
-            <span>{isLoading ? "Conectando..." : "Entrar com Google"}</span>
+            <span>{isLoading ? "Redirecionando..." : "Entrar com Google"}</span>
           </button>
 
           {/* Terms */}
