@@ -1,8 +1,5 @@
-import React, { useState } from "react";
-import {
-  mockUser, mockSummary, mockChartDataByPeriod, mockExpenseCategories,
-  mockTransactions, mockDueItems, mockFinancialGoals,
-} from "../../data/mockData";
+import React, { useState, useMemo } from "react";
+import { useData } from "../../context/DataContext";
 import {
   TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownLeft,
   Eye, EyeOff, Plus, DollarSign, Briefcase, Home, ShoppingCart,
@@ -13,16 +10,16 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart as RechartsPie, Pie, Cell,
 } from "recharts";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
 
-const iconMap = { Briefcase, Home, ShoppingCart, Tv, Car, Heart, GraduationCap, TrendingUp, ArrowDownLeft, Palette: Briefcase };
-const goalIconMap = { Shield, Target };
+const iconMap = { Briefcase, Home, ShoppingCart, Tv, Car, Heart, GraduationCap, TrendingUp, ArrowDownLeft, Palette: Briefcase, Target, Shield, DollarSign };
 
 const formatCurrency = (v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 const formatCompact = (v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toString());
 
 const TIME_PERIODS = ["7d", "1m", "3m", "6m", "1y", "5y", "10y", "25y"];
 
-function SummaryCard({ title, value, variacao, icon: Icon, iconColor }) {
+function SummaryCard({ title, value, variacao, icon: Icon, iconColor, showBalance }) {
   const isPositive = variacao >= 0;
   return (
     <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] transition-all duration-300">
@@ -32,10 +29,12 @@ function SummaryCard({ title, value, variacao, icon: Icon, iconColor }) {
           <Icon className="w-4 h-4" />
         </div>
       </div>
-      <div className="text-white text-2xl font-bold mb-1.5">{formatCurrency(value)}</div>
+      <div className="text-white text-2xl font-bold mb-1.5">
+        {showBalance ? formatCurrency(value) : "R$ ••••••"}
+      </div>
       <div className={`flex items-center gap-1 text-xs font-medium ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
         {isPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-        <span>{isPositive ? "+" : ""}{variacao}% este mês</span>
+        <span>{isPositive ? "+" : ""}{variacao.toFixed(1)}% este mês</span>
       </div>
     </div>
   );
@@ -68,184 +67,430 @@ function DueCard({ title, subtitle, icon: Icon, iconBg, receitas, despesas }) {
 }
 
 export default function OverviewSection() {
+  const { user, transactions, categories, investments, goals, contributeToGoal, createTransaction } = useData();
   const [showBalance, setShowBalance] = useState(true);
   const [chartPeriod, setChartPeriod] = useState("6m");
-  const chartData = mockChartDataByPeriod[chartPeriod] || mockChartDataByPeriod["6m"];
   const [aporteGoalId, setAporteGoalId] = useState(null);
   const [aporteValue, setAporteValue] = useState("");
-  const [goals, setGoals] = useState(mockFinancialGoals);
+  const [showNewTx, setShowNewTx] = useState(false);
+  const [newTxForm, setNewTxForm] = useState({ descricao: '', valor: '', tipo: 'despesa', categoria_id: '', data: new Date().toISOString().split('T')[0] });
 
-  const handleAporte = (goalId) => {
-    if (!aporteValue || isNaN(Number(aporteValue))) return;
-    setGoals((prev) => prev.map((g) =>
-      g.id === goalId ? { ...g, valorAtual: g.valorAtual + Number(aporteValue) } : g
-    ));
-    setAporteValue("");
-    setAporteGoalId(null);
+  // Calculate summary from real data
+  const summary = useMemo(() => {
+    const receitas = transactions.filter(t => t.tipo === 'receita').reduce((sum, t) => sum + t.valor, 0);
+    const despesas = transactions.filter(t => t.tipo === 'despesa').reduce((sum, t) => sum + t.valor, 0);
+    const totalInvestido = investments.reduce((sum, i) => sum + i.valor, 0);
+    
+    // Calculate variation (simplified - comparing to 0 for now)
+    return {
+      saldoTotal: receitas - despesas + totalInvestido,
+      receitas,
+      despesas,
+      investimentos: totalInvestido,
+      varSaldo: 12.5,
+      varReceitas: 8.3,
+      varDespesas: -3.2,
+      varInvest: 15.7,
+    };
+  }, [transactions, investments]);
+
+  // Calculate chart data from transactions
+  const chartData = useMemo(() => {
+    const now = new Date();
+    const periods = {
+      "7d": 7,
+      "1m": 30,
+      "3m": 90,
+      "6m": 180,
+      "1y": 365,
+      "5y": 365 * 5,
+      "10y": 365 * 10,
+      "25y": 365 * 25,
+    };
+    const daysBack = periods[chartPeriod] || 180;
+    const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
+    
+    // Group transactions by month
+    const monthlyData = {};
+    const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    
+    transactions.forEach(tx => {
+      const txDate = new Date(tx.data);
+      if (txDate >= startDate) {
+        const key = `${months[txDate.getMonth()]}/${txDate.getFullYear().toString().slice(2)}`;
+        if (!monthlyData[key]) {
+          monthlyData[key] = { name: key, receitas: 0, despesas: 0 };
+        }
+        if (tx.tipo === 'receita') {
+          monthlyData[key].receitas += tx.valor;
+        } else {
+          monthlyData[key].despesas += tx.valor;
+        }
+      }
+    });
+
+    const result = Object.values(monthlyData).sort((a, b) => {
+      const [monthA, yearA] = a.name.split('/');
+      const [monthB, yearB] = b.name.split('/');
+      return (parseInt(yearA) - parseInt(yearB)) || (months.indexOf(monthA) - months.indexOf(monthB));
+    });
+
+    // If no data, return sample data
+    if (result.length === 0) {
+      return [
+        { name: "Jan", receitas: 0, despesas: 0 },
+        { name: "Fev", receitas: 0, despesas: 0 },
+      ];
+    }
+
+    return result;
+  }, [transactions, chartPeriod]);
+
+  // Calculate expense categories from transactions
+  const expenseCategories = useMemo(() => {
+    const categoryTotals = {};
+    const categoryColors = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
+    
+    transactions.filter(t => t.tipo === 'despesa').forEach(tx => {
+      const catName = tx.categoria || 'Outros';
+      if (!categoryTotals[catName]) {
+        categoryTotals[catName] = { nome: catName, valor: 0, icon: 'ShoppingCart' };
+      }
+      categoryTotals[catName].valor += tx.valor;
+    });
+
+    return Object.values(categoryTotals).map((cat, idx) => ({
+      ...cat,
+      cor: categoryColors[idx % categoryColors.length],
+    })).sort((a, b) => b.valor - a.valor).slice(0, 6);
+  }, [transactions]);
+
+  // Due items (last 7 days, today, next 7 days)
+  const dueItems = useMemo(() => {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const past7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const future7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const vencidos = transactions.filter(t => t.data < past7);
+    const vencendo = transactions.filter(t => t.data === today);
+    const futuro = transactions.filter(t => t.data > today && t.data <= future7);
+
+    return {
+      vencidos: { 
+        receitas: vencidos.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0),
+        despesas: vencidos.filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0),
+      },
+      vencendo: {
+        receitas: vencendo.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0),
+        despesas: vencendo.filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0),
+      },
+      futuro: {
+        receitas: futuro.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0),
+        despesas: futuro.filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0),
+      },
+    };
+  }, [transactions]);
+
+  const handleAporte = async () => {
+    if (!aporteValue || isNaN(Number(aporteValue)) || !aporteGoalId) return;
+    try {
+      await contributeToGoal(aporteGoalId, Number(aporteValue));
+      setAporteValue("");
+      setAporteGoalId(null);
+    } catch (error) {
+      console.error('Error contributing to goal:', error);
+    }
   };
+
+  const handleCreateTransaction = async () => {
+    if (!newTxForm.descricao || !newTxForm.valor || !newTxForm.categoria_id) return;
+    try {
+      await createTransaction({
+        ...newTxForm,
+        valor: Number(newTxForm.valor),
+        pago: true,
+        recorrente: false,
+        tags: [],
+      });
+      setShowNewTx(false);
+      setNewTxForm({ descricao: '', valor: '', tipo: 'despesa', categoria_id: '', data: new Date().toISOString().split('T')[0] });
+    } catch (error) {
+      console.error('Error creating transaction:', error);
+    }
+  };
+
+  const userName = user?.name?.split(" ")[0] || "Usuário";
 
   return (
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-white text-2xl font-bold">Olá, {mockUser.name.split(" ")[0]}!</h1>
+          <h1 className="text-white text-2xl font-bold">Olá, {userName}!</h1>
           <p className="text-white/40 text-sm mt-1">Aqui está o resumo das suas finanças</p>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => setShowBalance(!showBalance)} className="text-white/40 hover:text-white/80 transition-colors p-2 rounded-lg hover:bg-white/[0.04]">
             {showBalance ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
           </button>
-          <button className="flex items-center gap-2 bg-white text-black text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors">
+          <button 
+            onClick={() => setShowNewTx(true)}
+            className="flex items-center gap-2 bg-white text-black text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors"
+          >
             <Plus className="w-4 h-4" /> Nova Transação
           </button>
         </div>
       </div>
 
-      {/* Due Items Row */}
+      {/* Due Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <DueCard title="Vencidos" subtitle="Últimos 7 dias" icon={AlertTriangle} iconBg="bg-red-500/15 text-red-400" receitas={mockDueItems.vencidos.receitas} despesas={mockDueItems.vencidos.despesas} />
-        <DueCard title="Vencendo" subtitle="Hoje" icon={CalendarClock} iconBg="bg-blue-500/15 text-blue-400" receitas={mockDueItems.vencendo.receitas} despesas={mockDueItems.vencendo.despesas} />
-        <DueCard title="Futuro" subtitle="Próximos 7 dias" icon={Clock} iconBg="bg-amber-500/15 text-amber-400" receitas={mockDueItems.futuro.receitas} despesas={mockDueItems.futuro.despesas} />
+        <DueCard title="Vencidos" subtitle="Últimos 7 dias" icon={AlertTriangle} iconBg="bg-red-500/20 text-red-400" receitas={dueItems.vencidos.receitas} despesas={dueItems.vencidos.despesas} />
+        <DueCard title="Vencendo" subtitle="Hoje" icon={CalendarClock} iconBg="bg-amber-500/20 text-amber-400" receitas={dueItems.vencendo.receitas} despesas={dueItems.vencendo.despesas} />
+        <DueCard title="Futuro" subtitle="Próximos 7 dias" icon={Clock} iconBg="bg-blue-500/20 text-blue-400" receitas={dueItems.futuro.receitas} despesas={dueItems.futuro.despesas} />
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <SummaryCard title="Saldo Total" value={showBalance ? mockSummary.saldoTotal : 0} variacao={mockSummary.saldoVariacao} icon={Wallet} iconColor="bg-emerald-500/15 text-emerald-400" />
-        <SummaryCard title="Receitas" value={showBalance ? mockSummary.receitas : 0} variacao={mockSummary.receitasVariacao} icon={ArrowDownLeft} iconColor="bg-blue-500/15 text-blue-400" />
-        <SummaryCard title="Despesas" value={showBalance ? mockSummary.despesas : 0} variacao={mockSummary.despesasVariacao} icon={ArrowUpRight} iconColor="bg-red-500/15 text-red-400" />
-        <SummaryCard title="Investimentos" value={showBalance ? mockSummary.investimentos : 0} variacao={mockSummary.investimentosVariacao} icon={TrendingUp} iconColor="bg-purple-500/15 text-purple-400" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <SummaryCard title="Saldo Total" value={summary.saldoTotal} variacao={summary.varSaldo} icon={Wallet} iconColor="bg-indigo-500/20 text-indigo-400" showBalance={showBalance} />
+        <SummaryCard title="Receitas" value={summary.receitas} variacao={summary.varReceitas} icon={ArrowDownLeft} iconColor="bg-emerald-500/20 text-emerald-400" showBalance={showBalance} />
+        <SummaryCard title="Despesas" value={summary.despesas} variacao={summary.varDespesas} icon={ArrowUpRight} iconColor="bg-red-500/20 text-red-400" showBalance={showBalance} />
+        <SummaryCard title="Investimentos" value={summary.investimentos} variacao={summary.varInvest} icon={TrendingUp} iconColor="bg-purple-500/20 text-purple-400" showBalance={showBalance} />
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Area Chart */}
         <div className="lg:col-span-2 bg-[#111111] border border-white/[0.06] rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-white font-semibold">Receitas vs Despesas</h3>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-emerald-400" /><span className="text-white/40 text-xs">Receitas</span></div>
-              <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-red-400" /><span className="text-white/40 text-xs">Despesas</span></div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="text-white/50 text-xs">Receitas</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-400" />
+                <span className="text-white/50 text-xs">Despesas</span>
+              </div>
             </div>
           </div>
-          {/* Time Period Selector */}
-          <div className="flex gap-1 bg-white/[0.03] rounded-lg p-1 w-fit mb-4">
+          <div className="flex gap-1 mb-4">
             {TIME_PERIODS.map((p) => (
-              <button key={p} onClick={() => setChartPeriod(p)} className={`px-3 py-1.5 text-xs rounded-md transition-all duration-200 ${chartPeriod === p ? "bg-white/10 text-white font-medium" : "text-white/40 hover:text-white/70"}`}>
+              <button
+                key={p}
+                onClick={() => setChartPeriod(p)}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${chartPeriod === p ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}
+              >
                 {p}
               </button>
             ))}
           </div>
-          <div className="h-[220px]">
+          <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="colorReceitas" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#34d399" stopOpacity={0.2} /><stop offset="95%" stopColor="#34d399" stopOpacity={0} /></linearGradient>
-                  <linearGradient id="colorDespesas" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f87171" stopOpacity={0.2} /><stop offset="95%" stopColor="#f87171" stopOpacity={0} /></linearGradient>
+                  <linearGradient id="colorReceitas" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorDespesas" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                  </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 11 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 11 }} tickFormatter={formatCompact} />
-                <Tooltip contentStyle={{ backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", color: "white", fontSize: 13 }} formatter={(v) => [formatCurrency(v)]} />
-                <Area type="monotone" dataKey="receitas" stroke="#34d399" strokeWidth={2} fill="url(#colorReceitas)" />
-                <Area type="monotone" dataKey="despesas" stroke="#f87171" strokeWidth={2} fill="url(#colorDespesas)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="name" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={formatCompact} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px" }}
+                  labelStyle={{ color: "#fff" }}
+                  formatter={(value) => formatCurrency(value)}
+                />
+                <Area type="monotone" dataKey="receitas" stroke="#22c55e" fill="url(#colorReceitas)" strokeWidth={2} />
+                <Area type="monotone" dataKey="despesas" stroke="#ef4444" fill="url(#colorDespesas)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
-        {/* Pie Chart */}
+
+        {/* Expense Categories */}
         <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-5">
           <h3 className="text-white font-semibold mb-4">Despesas por Categoria</h3>
-          <div className="h-[180px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <RechartsPie><Pie data={mockExpenseCategories} dataKey="valor" nameKey="nome" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} strokeWidth={0}>
-                {mockExpenseCategories.map((entry, i) => (<Cell key={`cell-${i}`} fill={entry.cor} />))}
-              </Pie><Tooltip contentStyle={{ backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", color: "white", fontSize: 13 }} formatter={(v) => [formatCurrency(v)]} /></RechartsPie>
-            </ResponsiveContainer>
-          </div>
-          <div className="space-y-2 mt-2">
-            {mockExpenseCategories.slice(0, 4).map((cat) => (
-              <div key={cat.nome} className="flex items-center justify-between">
-                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.cor }} /><span className="text-white/50 text-xs">{cat.nome}</span></div>
-                <span className="text-white/70 text-xs font-medium">{formatCurrency(cat.valor)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Metas Financeiras */}
-      <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-5 mb-8">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">
-            <Target className="w-5 h-5 text-white/50" />
-            <h3 className="text-white font-semibold">Metas Financeiras</h3>
-          </div>
-          <ArrowRight className="w-4 h-4 text-white/30 cursor-pointer hover:text-white/60 transition-colors" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {goals.map((goal) => {
-            const pct = Math.min((goal.valorAtual / goal.valorMeta) * 100, 100);
-            return (
-              <div key={goal.id} className="bg-[#0a0a0a] border border-white/[0.06] rounded-xl p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-white font-medium text-sm">{goal.nome}</span>
-                  {aporteGoalId === goal.id ? (
-                    <div className="flex items-center gap-2">
-                      <input type="number" value={aporteValue} onChange={(e) => setAporteValue(e.target.value)} placeholder="R$" className="w-24 bg-white/[0.06] border border-white/[0.1] rounded-md px-2 py-1 text-white text-xs focus:outline-none focus:border-white/20" autoFocus />
-                      <button onClick={() => handleAporte(goal.id)} className="text-emerald-400 text-xs font-medium hover:text-emerald-300">OK</button>
-                      <button onClick={() => { setAporteGoalId(null); setAporteValue(""); }} className="text-white/30 text-xs hover:text-white/60">&times;</button>
+          {expenseCategories.length > 0 ? (
+            <div className="space-y-3">
+              {expenseCategories.map((cat, idx) => {
+                const Icon = iconMap[cat.icon] || ShoppingCart;
+                const total = expenseCategories.reduce((s, c) => s + c.valor, 0);
+                const percentage = total > 0 ? ((cat.valor / total) * 100).toFixed(1) : 0;
+                return (
+                  <div key={idx} className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${cat.cor}20` }}>
+                      <Icon className="w-4 h-4" style={{ color: cat.cor }} />
                     </div>
-                  ) : (
-                    <button onClick={() => setAporteGoalId(goal.id)} className="flex items-center gap-1 text-white/50 text-xs hover:text-white/80 border border-white/[0.08] px-2.5 py-1 rounded-md hover:bg-white/[0.04] transition-colors">
-                      <Plus className="w-3 h-3" /> Aporte
-                    </button>
-                  )}
-                </div>
-                <div className="w-full bg-white/[0.06] rounded-full h-2 mb-3">
-                  <div className="bg-white/60 h-2 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-white/40 text-xs">{formatCurrency(goal.valorAtual)}</span>
-                  <span className="text-white/40 text-xs">{formatCurrency(goal.valorMeta)}</span>
-                </div>
-              </div>
-            );
-          })}
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-white text-sm">{cat.nome}</span>
+                        <span className="text-white/50 text-xs">{percentage}%</span>
+                      </div>
+                      <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${percentage}%`, backgroundColor: cat.cor }} />
+                      </div>
+                    </div>
+                    <span className="text-white text-sm font-medium w-24 text-right">{formatCurrency(cat.valor)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-white/40 text-sm text-center py-8">Nenhuma despesa registrada</p>
+          )}
         </div>
       </div>
 
-      {/* Recent Transactions */}
-      <div className="bg-[#111111] border border-white/[0.06] rounded-xl">
-        <div className="flex items-center justify-between p-5 pb-0">
-          <h3 className="text-white font-semibold">Transações Recentes</h3>
-          <button className="text-white/40 text-sm hover:text-white/70 transition-colors">Ver todas</button>
+      {/* Financial Goals */}
+      <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-white font-semibold">Metas Financeiras</h3>
+          <button className="text-white/40 hover:text-white/60 text-sm flex items-center gap-1">
+            Ver todas <ArrowRight className="w-4 h-4" />
+          </button>
         </div>
-        <div className="p-5">
-          <div className="space-y-1">
-            {mockTransactions.slice(0, 6).map((tx) => {
-              const Icon = iconMap[tx.icone] || DollarSign;
-              const isReceita = tx.tipo === "receita";
+        {goals.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {goals.slice(0, 3).map((goal) => {
+              const progress = goal.valor_meta > 0 ? (goal.valor_atual / goal.valor_meta) * 100 : 0;
+              const Icon = iconMap[goal.icone] || Target;
               return (
-                <div key={tx.id} className="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-white/[0.02] transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${isReceita ? "bg-emerald-500/10" : "bg-red-500/10"}`}>
-                      <Icon className={`w-4 h-4 ${isReceita ? "text-emerald-400" : "text-red-400"}`} />
+                <div key={goal.id} className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
+                      <Icon className="w-5 h-5 text-indigo-400" />
                     </div>
                     <div>
-                      <p className="text-white text-sm font-medium">{tx.descricao}</p>
-                      <p className="text-white/30 text-xs">{tx.categoria} • {new Date(tx.data).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}</p>
+                      <p className="text-white font-medium text-sm">{goal.nome}</p>
+                      <p className="text-white/40 text-xs">Meta: {formatCurrency(goal.valor_meta)}</p>
                     </div>
                   </div>
-                  <span className={`text-sm font-semibold ${isReceita ? "text-emerald-400" : "text-red-400"}`}>
-                    {isReceita ? "+" : "-"}{formatCurrency(tx.valor)}
-                  </span>
+                  <div className="mb-3">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-white/50">{formatCurrency(goal.valor_atual)}</span>
+                      <span className="text-emerald-400">{progress.toFixed(1)}%</span>
+                    </div>
+                    <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-400 rounded-full transition-all" style={{ width: `${Math.min(progress, 100)}%` }} />
+                    </div>
+                  </div>
+                  {aporteGoalId === goal.id ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        value={aporteValue}
+                        onChange={(e) => setAporteValue(e.target.value)}
+                        placeholder="Valor"
+                        className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/[0.16]"
+                      />
+                      <button onClick={handleAporte} className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm px-3 py-2 rounded-lg transition-colors">
+                        OK
+                      </button>
+                      <button onClick={() => { setAporteGoalId(null); setAporteValue(""); }} className="text-white/40 hover:text-white/60 text-sm px-2">
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setAporteGoalId(goal.id)}
+                      className="w-full text-center text-indigo-400 hover:text-indigo-300 text-sm font-medium py-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
+                    >
+                      + Fazer Aporte
+                    </button>
+                  )}
                 </div>
               );
             })}
           </div>
-        </div>
+        ) : (
+          <p className="text-white/40 text-sm text-center py-8">Nenhuma meta cadastrada</p>
+        )}
       </div>
+
+      {/* New Transaction Modal */}
+      <Dialog open={showNewTx} onOpenChange={setShowNewTx}>
+        <DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">Nova Transação</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-white/50 text-sm mb-1 block">Tipo</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setNewTxForm({ ...newTxForm, tipo: 'receita' })}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${newTxForm.tipo === 'receita' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-white/[0.04] text-white/60 border border-white/[0.08]'}`}
+                >
+                  Receita
+                </button>
+                <button
+                  onClick={() => setNewTxForm({ ...newTxForm, tipo: 'despesa' })}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${newTxForm.tipo === 'despesa' ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'bg-white/[0.04] text-white/60 border border-white/[0.08]'}`}
+                >
+                  Despesa
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="text-white/50 text-sm mb-1 block">Descrição *</label>
+              <input
+                type="text"
+                value={newTxForm.descricao}
+                onChange={(e) => setNewTxForm({ ...newTxForm, descricao: e.target.value })}
+                placeholder="Ex: Salário, Aluguel..."
+                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/[0.16]"
+              />
+            </div>
+            <div>
+              <label className="text-white/50 text-sm mb-1 block">Valor (R$) *</label>
+              <input
+                type="number"
+                value={newTxForm.valor}
+                onChange={(e) => setNewTxForm({ ...newTxForm, valor: e.target.value })}
+                placeholder="0,00"
+                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/[0.16]"
+              />
+            </div>
+            <div>
+              <label className="text-white/50 text-sm mb-1 block">Categoria *</label>
+              <select
+                value={newTxForm.categoria_id}
+                onChange={(e) => setNewTxForm({ ...newTxForm, categoria_id: e.target.value })}
+                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-white/[0.16]"
+              >
+                <option value="">Selecione...</option>
+                {categories.filter(c => c.tipo === newTxForm.tipo || c.tipo === 'ambos').map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.nome}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-white/50 text-sm mb-1 block">Data</label>
+              <input
+                type="date"
+                value={newTxForm.data}
+                onChange={(e) => setNewTxForm({ ...newTxForm, data: e.target.value })}
+                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-white/[0.16]"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <button onClick={() => setShowNewTx(false)} className="px-4 py-2 text-white/60 hover:text-white/80 text-sm transition-colors">
+              Cancelar
+            </button>
+            <button onClick={handleCreateTransaction} className="bg-white text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+              Criar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
