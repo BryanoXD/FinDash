@@ -10,7 +10,7 @@ Clone do FinPulse (https://finpulse-92.preview.emergentagent.com/) - aplicação
 ## Core Requirements
 
 ### Phase 1 (Completed)
-- ✅ Login page com autenticação via Google (mockada)
+- ✅ Login page com autenticação via Google OAuth (Emergent Auth)
 - ✅ Dashboard principal com resumo financeiro
 - ✅ Layout responsivo com Sidebar colapsável
 
@@ -31,6 +31,17 @@ Clone do FinPulse (https://finpulse-92.preview.emergentagent.com/) - aplicação
 - ✅ Orçamentos por categoria com barras de progresso
 - ✅ Vinculação de investimentos e financiamentos a contas bancárias
 
+### Phase 4 (Completed - 15/02/2026)
+- ✅ **Backend FastAPI completo** com MongoDB
+- ✅ **Autenticação real** com Google OAuth (Emergent Auth)
+- ✅ **Integração frontend-backend** (substituição de mockData)
+- ✅ **Regras de negócio** implementadas:
+  - Fatura do cartão = soma das parcelas não pagas
+  - Pagamento de parcelas recalcula fatura e limite usado
+  - Orçamentos calculados a partir das despesas pagas
+  - Aportes em metas incrementam valor_atual
+  - Aportes em investimentos atualizam valor total
+
 ## Architecture
 
 ### Frontend
@@ -39,66 +50,63 @@ Clone do FinPulse (https://finpulse-92.preview.emergentagent.com/) - aplicação
 - Shadcn/UI para componentes
 - Recharts para gráficos
 - Lucide-react para ícones
+- DataContext para gerenciamento de estado global
 
-### Backend (Não implementado)
-- FastAPI (scaffolded)
-- MongoDB (configurado)
+### Backend
+- FastAPI com rotas RESTful
+- MongoDB (Motor async driver)
+- Autenticação via Emergent Google OAuth
+- Sessions com cookies httpOnly
 
-### Data Layer
-- Atualmente todos os dados são MOCKADOS em `/app/frontend/src/data/mockData.js`
+## API Endpoints
+
+### Auth
+- `POST /api/auth/session` - Criar sessão a partir do Emergent Auth
+- `GET /api/auth/me` - Obter usuário atual
+- `POST /api/auth/logout` - Logout
+
+### Resources (CRUD completo para cada)
+- `/api/categories`
+- `/api/tags`
+- `/api/transactions`
+- `/api/accounts`
+- `/api/cards` + `/api/cards/{id}/pay-invoice` + `/api/cards/installments`
+- `/api/investments` + `/api/investments/contributions`
+- `/api/financings`
+- `/api/budgets`
+- `/api/goals` + `/api/goals/{id}/contribute`
 
 ## File Structure
 ```
-/app/frontend/src/
-├── pages/
-│   ├── LoginPage.jsx
-│   └── DashboardPage.jsx
-│   └── sections/
-│       ├── OverviewSection.jsx
-│       ├── OtherSections.jsx (Receitas, Despesas, Categorias, Orçamento, Heatmap, Relatórios, Metas, Import, Settings)
-│       ├── InvestmentsSection.jsx (+ SimuladorSection)
-│       └── CardsAccountsSection.jsx
-├── components/
-│   ├── Sidebar.jsx
-│   └── ui/ (shadcn components)
-└── data/
-    └── mockData.js
+/app
+├── backend/
+│   ├── server.py (main FastAPI app)
+│   ├── models.py (Pydantic schemas)
+│   ├── seed.py (dados iniciais para novos usuários)
+│   └── routes/ (rotas modulares)
+│       ├── auth.py
+│       ├── categories.py, tags.py, transactions.py
+│       ├── accounts.py, cards.py, investments.py
+│       ├── financings.py, budgets.py, goals.py
+└── frontend/
+    └── src/
+        ├── services/api.js (API client)
+        ├── context/DataContext.jsx (estado global)
+        ├── components/AuthCallback.jsx (OAuth callback)
+        └── pages/sections/ (seções do dashboard)
 ```
 
-## What's Been Implemented (December 2025)
-
-### 14/02/2026
-- Corrigido rota do Simulador em DashboardPage.jsx
-- Corrigido caracteres especiais (unicode escapes) em OtherSections.jsx
-- Todas as 12 seções do dashboard funcionando:
-  1. Dashboard (Overview)
-  2. Receitas
-  3. Despesas
-  4. Categorias
-  5. Orçamento
-  6. Investimentos
-  7. Simulador
-  8. Contas e Cartões
-  9. Heatmap de Gastos
-  10. Importar Extratos
-  11. Relatórios
-  12. Metas Financeiras
-  13. Configurações
-
 ## Testing Status
-- Frontend: 100% testado e funcionando
-- Backend: Não implementado
+- ✅ Backend: 23 APIs testadas (100%)
+- ✅ Frontend: Integração completa com DataContext
 
 ## P0 - Critical (Next Steps)
-1. **Backend Implementation**
-   - Criar schemas MongoDB para: Users, Accounts, Cards, Transactions, Investments, Budgets, Categories, Tags
-   - Implementar endpoints FastAPI para CRUD de todas as entidades
-   - Autenticação real com JWT ou Google OAuth
+Nenhum - MVP completo
 
 ## P1 - High Priority
-1. Refatorar `OtherSections.jsx` em arquivos menores para melhor manutenibilidade
-2. Integração frontend com backend (substituir mockData por API calls)
-3. Persistência de dados
+1. Implementar logout na sidebar (botão "Sair")
+2. Atualizar InvestmentsSection e CardsAccountsSection para usar DataContext
+3. Heatmap baseado em dados reais de transações
 
 ## P2 - Medium Priority
 1. Implementar importação real de extratos (CSV, OFX)
