@@ -86,6 +86,9 @@ async def create_session(request: Request, response: Response, db=None):
         user_doc = user.model_dump()
         user_doc["created_at"] = user_doc["created_at"].isoformat()
         await db.users.insert_one(user_doc)
+        
+        # Seed initial data for new user
+        await seed_user_data(user_id, db)
     
     # Create session
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
