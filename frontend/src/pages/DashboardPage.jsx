@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import { Routes, Route } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
-import { mockUser } from "../data/mockData";
 import { Bell, Search } from "lucide-react";
+import { DataProvider, useData } from "../context/DataContext";
 import OverviewSection from "./sections/OverviewSection";
-import InvestmentsSection from "./sections/InvestmentsSection";
+import InvestmentsSection, { SimuladorSection } from "./sections/InvestmentsSection";
 import CardsAccountsSection from "./sections/CardsAccountsSection";
 import {
   ReceitasSection,
@@ -17,10 +17,41 @@ import {
   ImportSection,
   SettingsSection,
 } from "./sections/OtherSections";
-import { SimuladorSection } from "./sections/InvestmentsSection";
 
-export default function DashboardPage() {
+function DashboardContent() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { user, isLoading, error } = useData();
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white/60 text-sm">Carregando dados...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-400 text-sm mb-4">Erro ao carregar dados: {error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="text-white/60 text-sm underline hover:text-white/80"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const userInitials = user?.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U';
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
@@ -45,8 +76,15 @@ export default function DashboardPage() {
             <Bell className="w-5 h-5" />
             <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-400 rounded-full" />
           </button>
-          <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">
-            <span className="text-white text-xs font-medium">{mockUser.avatar}</span>
+          <div className="flex items-center gap-3">
+            {user?.picture ? (
+              <img src={user.picture} alt={user.name} className="w-8 h-8 rounded-full" />
+            ) : (
+              <div className="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center">
+                <span className="text-white text-xs font-medium">{userInitials}</span>
+              </div>
+            )}
+            <span className="text-white/60 text-sm hidden sm:block">{user?.name}</span>
           </div>
         </div>
       </div>
@@ -74,5 +112,13 @@ export default function DashboardPage() {
         </Routes>
       </main>
     </div>
+  );
+}
+
+export default function DashboardPage({ user }) {
+  return (
+    <DataProvider user={user}>
+      <DashboardContent />
+    </DataProvider>
   );
 }
