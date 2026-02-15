@@ -120,11 +120,82 @@ async def health_check():
 @app.post("/api/auth/session")
 async def auth_session(request: Request):
     from fastapi.responses import JSONResponse
-    from routes.auth import create_session
-    response = JSONResponse(content={})
-    result = await create_session(request, response, db=db)
-    # Return response with cookies set
-    response.body = response.render(result)
+    from routes.auth import EMERGENT_AUTH_URL, get_session_token_from_request
+    from models import User, UserSession
+    from seed import seed_user_data
+    from datetime import datetime, timezone, timedelta
+    import httpx
+    import uuid
+    
+    body = await request.json()
+    session_id = body.get("session_id")
+    
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+    
+    # Get user data from Emergent Auth
+    async with httpx.AsyncClient() as client:
+        try:
+            auth_response = await client.get(
+                EMERGENT_AUTH_URL,
+                headers={"X-Session-ID": session_id}
+            )
+            if auth_response.status_code != 200:
+                raise HTTPException(status_code=401, detail="Invalid session_id")
+            
+            user_data = auth_response.json()
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=500, detail=f"Auth service error: {str(e)}")
+    
+    email = user_data.get("email")
+    name = user_data.get("name")
+    picture = user_data.get("picture")
+    session_token = user_data.get("session_token")
+    
+    if not email or not session_token:
+        raise HTTPException(status_code=400, detail="Invalid auth response")
+    
+    # Check if user exists
+    existing_user = await db.users.find_one({"email": email}, {"_id": 0})
+    
+    if existing_user:
+        user_id = existing_user["user_id"]
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"name": name, "picture": picture}}
+        )
+    else:
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        user = User(user_id=user_id, email=email, name=name, picture=picture)
+        user_doc = user.model_dump()
+        user_doc["created_at"] = user_doc["created_at"].isoformat()
+        await db.users.insert_one(user_doc)
+        await seed_user_data(user_id, db)
+    
+    # Create session
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    session = UserSession(user_id=user_id, session_token=session_token, expires_at=expires_at)
+    session_doc = session.model_dump()
+    session_doc["expires_at"] = session_doc["expires_at"].isoformat()
+    session_doc["created_at"] = session_doc["created_at"].isoformat()
+    
+    await db.user_sessions.delete_many({"user_id": user_id})
+    await db.user_sessions.insert_one(session_doc)
+    
+    # Get user data
+    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    
+    # Create response with cookie
+    response = JSONResponse(content={"user": user_doc, "message": "Session created successfully"})
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+        max_age=7 * 24 * 60 * 60
+    )
     return response
 
 
