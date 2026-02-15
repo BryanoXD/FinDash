@@ -1,11 +1,40 @@
 """
 Transaction routes for FinDash
+With proper business rules for budget tracking
 """
 from fastapi import APIRouter, HTTPException, Request, Query
 from typing import List, Optional
+from datetime import datetime
 from models import Transaction, TransactionCreate, TransactionUpdate
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+
+async def recalculate_budget_spent(categoria_id: str, user_id: str, db):
+    """
+    Recalcula o gasto de um orçamento baseado nas despesas pagas da categoria
+    REGRA: gasto = soma das despesas pagas da categoria
+    """
+    # Busca todas as despesas pagas desta categoria
+    transactions = await db.transactions.find(
+        {
+            "user_id": user_id,
+            "categoria_id": categoria_id,
+            "tipo": "despesa",
+            "pago": True
+        },
+        {"_id": 0}
+    ).to_list(10000)
+    
+    total_gasto = sum(t["valor"] for t in transactions)
+    
+    # Atualiza o orçamento se existir
+    await db.budgets.update_one(
+        {"user_id": user_id, "categoria_id": categoria_id},
+        {"$set": {"gasto": total_gasto}}
+    )
+    
+    return total_gasto
 
 
 @router.get("", response_model=List[Transaction])
@@ -29,7 +58,10 @@ async def get_transactions(
 
 @router.post("", response_model=Transaction)
 async def create_transaction(data: TransactionCreate, request: Request, db=None, user_id: str = None):
-    """Create a new transaction"""
+    """
+    Create a new transaction
+    REGRA: Se for despesa paga, atualiza o orçamento da categoria
+    """
     # Get category name
     category = await db.categories.find_one({"id": data.categoria_id, "user_id": user_id}, {"_id": 0})
     if not category:
@@ -43,22 +75,24 @@ async def create_transaction(data: TransactionCreate, request: Request, db=None,
     doc["created_at"] = doc["created_at"].isoformat()
     await db.transactions.insert_one(doc)
     
-    # Update budget spent if it's a despesa
+    # Se for despesa paga, recalcula o orçamento
     if transaction.tipo == "despesa" and transaction.pago:
-        await db.budgets.update_one(
-            {"user_id": user_id, "categoria_id": data.categoria_id},
-            {"$inc": {"gasto": transaction.valor}}
-        )
+        await recalculate_budget_spent(data.categoria_id, user_id, db)
     
     return transaction
 
 
 @router.put("/{transaction_id}", response_model=Transaction)
 async def update_transaction(transaction_id: str, data: TransactionUpdate, request: Request, db=None, user_id: str = None):
-    """Update a transaction"""
+    """
+    Update a transaction
+    REGRA: Recalcula orçamentos afetados (categoria antiga e nova)
+    """
     existing = await db.transactions.find_one({"id": transaction_id, "user_id": user_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    old_categoria_id = existing.get("categoria_id")
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     
@@ -75,22 +109,44 @@ async def update_transaction(transaction_id: str, data: TransactionUpdate, reque
         )
     
     updated = await db.transactions.find_one({"id": transaction_id}, {"_id": 0})
+    
+    # Recalcula orçamentos afetados
+    if updated["tipo"] == "despesa":
+        await recalculate_budget_spent(updated["categoria_id"], user_id, db)
+        # Se mudou de categoria, recalcula a antiga também
+        if old_categoria_id and old_categoria_id != updated["categoria_id"]:
+            await recalculate_budget_spent(old_categoria_id, user_id, db)
+    
     return updated
 
 
 @router.delete("/{transaction_id}")
 async def delete_transaction(transaction_id: str, request: Request, db=None, user_id: str = None):
-    """Delete a transaction"""
+    """
+    Delete a transaction
+    REGRA: Recalcula o orçamento da categoria
+    """
+    existing = await db.transactions.find_one({"id": transaction_id, "user_id": user_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    categoria_id = existing.get("categoria_id")
+    tipo = existing.get("tipo")
+    
     result = await db.transactions.delete_one({"id": transaction_id, "user_id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Recalcula orçamento se era despesa
+    if tipo == "despesa" and categoria_id:
+        await recalculate_budget_spent(categoria_id, user_id, db)
+    
     return {"message": "Transaction deleted"}
 
 
 @router.get("/summary")
 async def get_transaction_summary(request: Request, db=None, user_id: str = None):
     """Get summary of transactions (receitas, despesas, saldo)"""
-    # Get all transactions
     transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
     
     receitas = sum(t["valor"] for t in transactions if t["tipo"] == "receita")
@@ -101,3 +157,27 @@ async def get_transaction_summary(request: Request, db=None, user_id: str = None
         "despesas": despesas,
         "saldo": receitas - despesas
     }
+
+
+@router.patch("/{transaction_id}/toggle-paid")
+async def toggle_transaction_paid(transaction_id: str, request: Request, db=None, user_id: str = None):
+    """
+    Toggle the paid status of a transaction
+    REGRA: Ao mudar status, recalcula o orçamento
+    """
+    existing = await db.transactions.find_one({"id": transaction_id, "user_id": user_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    new_pago = not existing.get("pago", True)
+    
+    await db.transactions.update_one(
+        {"id": transaction_id, "user_id": user_id},
+        {"$set": {"pago": new_pago}}
+    )
+    
+    # Recalcula orçamento se for despesa
+    if existing["tipo"] == "despesa":
+        await recalculate_budget_spent(existing["categoria_id"], user_id, db)
+    
+    return {"message": f"Transaction marked as {'paid' if new_pago else 'pending'}", "pago": new_pago}
