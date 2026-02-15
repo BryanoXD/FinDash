@@ -7,6 +7,7 @@ from datetime import datetime, timezone, timedelta
 import httpx
 import uuid
 from models import User, UserSession
+from seed import seed_user_data
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
