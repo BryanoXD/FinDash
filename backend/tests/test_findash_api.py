@@ -16,7 +16,7 @@ import requests
 import os
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
-AUTH_TOKEN = "test_session_phase3_1776093840202"
+AUTH_TOKEN = "test_session_p1_1776094414719"
 
 class TestHealthAndAuth:
     """Health check and authentication tests"""
@@ -654,6 +654,281 @@ class TestInstallmentBatch:
         print(f"Correctly returned 400 for invalid card: {data['detail']}")
 
 
+# ============== P1 TESTS: LOGOUT, INVESTMENTS, FINANCINGS ==============
+
+class TestLogout:
+    """P1: Logout endpoint tests - Run LAST to preserve session"""
+    
+    def setup_method(self):
+        self.headers = {"Authorization": f"Bearer {AUTH_TOKEN}", "Content-Type": "application/json"}
+    
+    def test_z_logout_returns_success(self):
+        """Test that logout endpoint returns success message (named z_ to run last)"""
+        # Create a temporary session for logout test
+        import uuid
+        temp_token = f"temp_logout_test_{uuid.uuid4().hex[:8]}"
+        
+        # Insert temp session
+        import subprocess
+        subprocess.run([
+            "mongosh", "--quiet", "--eval",
+            f"use('test_database'); db.user_sessions.insertOne({{user_id: 'test_user_p1_1776094414719', session_token: '{temp_token}', expires_at: new Date(Date.now() + 60000).toISOString(), created_at: new Date().toISOString()}})"
+        ], capture_output=True)
+        
+        # Test logout with temp session
+        temp_headers = {"Authorization": f"Bearer {temp_token}", "Content-Type": "application/json"}
+        response = requests.post(f"{BASE_URL}/api/auth/logout", headers=temp_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert "message" in data
+        assert data["message"] == "Logged out successfully"
+        print(f"Logout response: {data['message']}")
+
+
+class TestInvestmentsCRUD:
+    """P1: Investment CRUD tests"""
+    
+    def setup_method(self):
+        self.headers = {"Authorization": f"Bearer {AUTH_TOKEN}", "Content-Type": "application/json"}
+    
+    def test_get_investments(self):
+        """Test getting all investments"""
+        response = requests.get(f"{BASE_URL}/api/investments", headers=self.headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        for inv in data:
+            assert "id" in inv
+            assert "nome" in inv
+            assert "tipo" in inv
+            assert "valor" in inv
+            assert "rendimento" in inv
+        print(f"Retrieved {len(data)} investments")
+    
+    def test_create_investment(self):
+        """Test creating a new investment"""
+        create_data = {
+            "nome": "TEST_Investment_P1",
+            "tipo": "Renda Fixa",
+            "valor": 1500,
+            "rendimento": 11.0,
+            "banco_id": None
+        }
+        response = requests.post(f"{BASE_URL}/api/investments", headers=self.headers, json=create_data)
+        assert response.status_code == 200
+        created = response.json()
+        assert created["nome"] == "TEST_Investment_P1"
+        assert created["tipo"] == "Renda Fixa"
+        assert created["valor"] == 1500
+        assert created["rendimento"] == 11.0
+        print(f"Created investment: {created['id']}")
+        
+        # Cleanup
+        requests.delete(f"{BASE_URL}/api/investments/{created['id']}", headers=self.headers)
+    
+    def test_update_investment(self):
+        """Test updating an investment"""
+        # Create first
+        create_data = {"nome": "TEST_Update_Inv", "tipo": "CDB", "valor": 1000, "rendimento": 9.0}
+        response = requests.post(f"{BASE_URL}/api/investments", headers=self.headers, json=create_data)
+        created = response.json()
+        inv_id = created["id"]
+        
+        # Update
+        update_data = {"nome": "TEST_Update_Inv_Modified", "valor": 2000}
+        response = requests.put(f"{BASE_URL}/api/investments/{inv_id}", headers=self.headers, json=update_data)
+        assert response.status_code == 200
+        updated = response.json()
+        assert updated["nome"] == "TEST_Update_Inv_Modified"
+        assert updated["valor"] == 2000
+        print(f"Updated investment: {inv_id}")
+        
+        # Cleanup
+        requests.delete(f"{BASE_URL}/api/investments/{inv_id}", headers=self.headers)
+    
+    def test_delete_investment(self):
+        """Test deleting an investment"""
+        # Create first
+        create_data = {"nome": "TEST_Delete_Inv", "tipo": "FIIs", "valor": 500, "rendimento": 7.0}
+        response = requests.post(f"{BASE_URL}/api/investments", headers=self.headers, json=create_data)
+        created = response.json()
+        inv_id = created["id"]
+        
+        # Delete
+        response = requests.delete(f"{BASE_URL}/api/investments/{inv_id}", headers=self.headers)
+        assert response.status_code == 200
+        
+        # Verify deleted
+        response = requests.get(f"{BASE_URL}/api/investments", headers=self.headers)
+        investments = response.json()
+        assert not any(inv["id"] == inv_id for inv in investments)
+        print(f"Deleted investment: {inv_id}")
+
+
+class TestContributions:
+    """P1: Investment contribution tests"""
+    
+    def setup_method(self):
+        self.headers = {"Authorization": f"Bearer {AUTH_TOKEN}", "Content-Type": "application/json"}
+    
+    def test_get_all_contributions(self):
+        """Test getting all contributions"""
+        response = requests.get(f"{BASE_URL}/api/investments/contributions/all", headers=self.headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        for contrib in data:
+            assert "id" in contrib
+            assert "investimento_id" in contrib
+            assert "valor" in contrib
+            assert "data" in contrib
+            assert "tipo" in contrib
+        print(f"Retrieved {len(data)} contributions")
+    
+    def test_create_contribution_updates_investment_valor(self):
+        """Test that creating a contribution updates the investment valor"""
+        # Get investments
+        response = requests.get(f"{BASE_URL}/api/investments", headers=self.headers)
+        investments = response.json()
+        
+        if not investments:
+            pytest.skip("No investments to test contributions")
+        
+        inv = investments[0]
+        inv_id = inv["id"]
+        valor_before = inv["valor"]
+        
+        # Create contribution (aporte)
+        contrib_data = {
+            "investimento_id": inv_id,
+            "valor": 100,
+            "data": "2025-03-01",
+            "tipo": "aporte"
+        }
+        response = requests.post(f"{BASE_URL}/api/investments/contributions", headers=self.headers, json=contrib_data)
+        assert response.status_code == 200
+        contrib = response.json()
+        assert contrib["valor"] == 100
+        assert contrib["tipo"] == "aporte"
+        print(f"Created contribution: {contrib['id']}")
+        
+        # Verify investment valor increased
+        response = requests.get(f"{BASE_URL}/api/investments", headers=self.headers)
+        investments = response.json()
+        updated_inv = next(i for i in investments if i["id"] == inv_id)
+        assert updated_inv["valor"] == valor_before + 100
+        print(f"Investment valor updated: {valor_before} -> {updated_inv['valor']}")
+
+
+class TestFinancingsCRUD:
+    """P1: Financing CRUD tests"""
+    
+    def setup_method(self):
+        self.headers = {"Authorization": f"Bearer {AUTH_TOKEN}", "Content-Type": "application/json"}
+    
+    def test_get_financings(self):
+        """Test getting all financings"""
+        response = requests.get(f"{BASE_URL}/api/financings", headers=self.headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        for fin in data:
+            assert "id" in fin
+            assert "nome" in fin
+            assert "valor_total" in fin
+            assert "parcelas" in fin
+            assert "parcela_atual" in fin
+            assert "valor_parcela" in fin
+            assert "status" in fin
+        print(f"Retrieved {len(data)} financings")
+    
+    def test_create_financing(self):
+        """Test creating a new financing"""
+        create_data = {
+            "nome": "TEST_Financing_P1",
+            "banco_id": None,
+            "valor_total": 100000,
+            "parcelas": 120,
+            "valor_parcela": 950,
+            "taxa": 9.5
+        }
+        response = requests.post(f"{BASE_URL}/api/financings", headers=self.headers, json=create_data)
+        assert response.status_code == 200
+        created = response.json()
+        assert created["nome"] == "TEST_Financing_P1"
+        assert created["valor_total"] == 100000
+        assert created["parcelas"] == 120
+        assert created["parcela_atual"] == 0
+        assert created["status"] == "ativo"
+        print(f"Created financing: {created['id']}")
+        
+        # Cleanup
+        requests.delete(f"{BASE_URL}/api/financings/{created['id']}", headers=self.headers)
+    
+    def test_pay_financing_installment(self):
+        """Test paying a financing installment"""
+        # Create financing first
+        create_data = {
+            "nome": "TEST_Pay_Fin",
+            "banco_id": None,
+            "valor_total": 10000,
+            "parcelas": 10,
+            "valor_parcela": 1100,
+            "taxa": 10.0
+        }
+        response = requests.post(f"{BASE_URL}/api/financings", headers=self.headers, json=create_data)
+        created = response.json()
+        fin_id = created["id"]
+        
+        # Pay installment
+        response = requests.post(f"{BASE_URL}/api/financings/{fin_id}/pay-installment", headers=self.headers)
+        assert response.status_code == 200
+        result = response.json()
+        assert result["parcela_atual"] == 1
+        assert result["status"] == "ativo"
+        print(f"Paid installment: parcela_atual = {result['parcela_atual']}")
+        
+        # Verify via GET
+        response = requests.get(f"{BASE_URL}/api/financings", headers=self.headers)
+        financings = response.json()
+        updated_fin = next(f for f in financings if f["id"] == fin_id)
+        assert updated_fin["parcela_atual"] == 1
+        assert updated_fin["valor_pago"] == 1100
+        
+        # Cleanup
+        requests.delete(f"{BASE_URL}/api/financings/{fin_id}", headers=self.headers)
+    
+    def test_financing_status_changes_to_quitado(self):
+        """Test that financing status changes to 'quitado' when all installments are paid"""
+        # Create financing with 2 parcelas
+        create_data = {
+            "nome": "TEST_Quitado_Fin",
+            "banco_id": None,
+            "valor_total": 2000,
+            "parcelas": 2,
+            "valor_parcela": 1050,
+            "taxa": 5.0
+        }
+        response = requests.post(f"{BASE_URL}/api/financings", headers=self.headers, json=create_data)
+        created = response.json()
+        fin_id = created["id"]
+        
+        # Pay first installment
+        response = requests.post(f"{BASE_URL}/api/financings/{fin_id}/pay-installment", headers=self.headers)
+        result = response.json()
+        assert result["status"] == "ativo"
+        
+        # Pay second (last) installment
+        response = requests.post(f"{BASE_URL}/api/financings/{fin_id}/pay-installment", headers=self.headers)
+        result = response.json()
+        assert result["status"] == "quitado"
+        assert result["parcela_atual"] == 2
+        print(f"Financing status changed to quitado after all installments paid")
+        
+        # Cleanup
+        requests.delete(f"{BASE_URL}/api/financings/{fin_id}", headers=self.headers)
+
+
 # Cleanup test data after all tests
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_test_data():
@@ -674,3 +949,17 @@ def cleanup_test_data():
         for tx in response.json():
             if tx["descricao"].startswith("TEST_"):
                 requests.delete(f"{BASE_URL}/api/transactions/{tx['id']}", headers=headers)
+    
+    # Cleanup investments
+    response = requests.get(f"{BASE_URL}/api/investments", headers=headers)
+    if response.status_code == 200:
+        for inv in response.json():
+            if inv["nome"].startswith("TEST_"):
+                requests.delete(f"{BASE_URL}/api/investments/{inv['id']}", headers=headers)
+    
+    # Cleanup financings
+    response = requests.get(f"{BASE_URL}/api/financings", headers=headers)
+    if response.status_code == 200:
+        for fin in response.json():
+            if fin["nome"].startswith("TEST_"):
+                requests.delete(f"{BASE_URL}/api/financings/{fin['id']}", headers=headers)

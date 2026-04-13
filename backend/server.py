@@ -125,13 +125,7 @@ async def health_check():
 # ============== AUTH ROUTES (special handling) ==============
 @app.post("/api/auth/session")
 async def auth_session(request: Request):
-    from fastapi.responses import JSONResponse
-    from routes.auth import EMERGENT_AUTH_URL, get_session_token_from_request
-    from models import User, UserSession
-    from seed import seed_user_data
-    from datetime import datetime, timezone, timedelta
-    import httpx
-    import uuid
+    from routes.auth import get_session_token_from_request
     
     body = await request.json()
     session_id = body.get("session_id")
@@ -213,10 +207,20 @@ async def auth_me(request: Request):
 
 @app.post("/api/auth/logout")
 async def auth_logout(request: Request):
-    from fastapi.responses import JSONResponse
-    from routes.auth import logout
-    response = JSONResponse(content={})
-    return await logout(request, response, db=db)
+    from routes.auth import get_session_token_from_request
+    
+    session_token = get_session_token_from_request(request)
+    if session_token:
+        await db.user_sessions.delete_many({"session_token": session_token})
+    
+    response = JSONResponse(content={"message": "Logged out successfully"})
+    response.delete_cookie(
+        key="session_token",
+        path="/",
+        secure=True,
+        samesite="none"
+    )
+    return response
 
 
 # ============== CATEGORIES ROUTES ==============

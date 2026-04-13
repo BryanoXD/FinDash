@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { authAPI } from "../services/api";
 import {
   LayoutDashboard,
   TrendingUp as TrendingUpIcon,
@@ -47,7 +48,12 @@ export default function Sidebar({ collapsed, setCollapsed }) {
     return location.pathname.startsWith(path);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout();
+    } catch (e) {
+      console.error('Logout error:', e);
+    }
     localStorage.removeItem("findash_auth");
     localStorage.removeItem("findash_user");
     navigate("/");
@@ -130,6 +136,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
           );
         })}
         <button
+          data-testid="sidebar-logout-btn"
           onClick={handleLogout}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 ${
             collapsed ? "justify-center" : ""
