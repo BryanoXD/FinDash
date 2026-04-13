@@ -488,6 +488,12 @@ async def pay_financing_installment(financing_id: str, request: Request):
     return await financings.pay_financing_installment(financing_id, request, db=db, user_id=user_id)
 
 
+@app.post("/api/financings/{financing_id}/pay-custom")
+async def pay_financing_custom(financing_id: str, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await financings.pay_financing_custom(financing_id, request, db=db, user_id=user_id)
+
+
 # ============== BUDGETS ROUTES ==============
 @app.get("/api/budgets")
 async def get_budgets(request: Request):

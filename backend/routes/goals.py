@@ -51,12 +51,15 @@ async def delete_goal(goal_id: str, request: Request, db=None, user_id: str = No
 
 @router.post("/{goal_id}/contribute")
 async def contribute_to_goal(goal_id: str, data: GoalContributionCreate, request: Request, db=None, user_id: str = None):
-    """Add a contribution (aporte) to a goal"""
+    """Add a contribution (aporte) or withdrawal (saque) to a goal"""
     goal = await db.goals.find_one({"id": goal_id, "user_id": user_id}, {"_id": 0})
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
     
     new_valor = goal["valor_atual"] + data.valor
+    if new_valor < 0:
+        new_valor = 0
+    
     await db.goals.update_one(
         {"id": goal_id, "user_id": user_id},
         {"$set": {"valor_atual": new_valor}}

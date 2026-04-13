@@ -14,22 +14,22 @@ const Inp = (props) => (<input {...props} className={`w-full bg-white/[0.06] bor
 const Sel = ({ children, ...rest }) => (<select {...rest} className={`w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/20 [&>option]:bg-[#1a1a1a] ${rest.className || ""}`}>{children}</select>);
 const Btn = ({ children, variant = "primary", ...rest }) => (<button {...rest} className={`text-sm font-medium px-4 py-2.5 rounded-lg transition-colors ${variant === "primary" ? "bg-white text-black hover:bg-gray-100" : "text-white/40 border border-white/[0.08] hover:bg-white/[0.04]"}`}>{children}</button>);
 
-function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags, cards, onCreateInstallmentBatch }) {
+function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags, cards, onCreateInstallmentBatch, financings, onPayFinancingCustom }) {
   const [form, setForm] = useState({ 
     valor: "", data: new Date().toISOString().split("T")[0], categoria_id: "", descricao: "", 
     metodo: "", tags: [], recorrente: false, pago: true, detalhado: false, itens: [],
-    parcelas: 1, card_id: ""
+    parcelas: 1, card_id: "", financing_id: ""
   });
   const [newItem, setNewItem] = useState({ nome: "", valor: "" });
   
   React.useEffect(() => { 
     if (item) {
-      setForm({ ...item, categoria_id: item.categoria_id || "", parcelas: 1, card_id: "" }); 
+      setForm({ ...item, categoria_id: item.categoria_id || "", parcelas: 1, card_id: "", financing_id: "" }); 
     } else {
       setForm({ 
         valor: "", data: new Date().toISOString().split("T")[0], categoria_id: "", descricao: "", 
         metodo: "", tags: [], recorrente: false, pago: true, detalhado: false, itens: [],
-        parcelas: 1, card_id: ""
+        parcelas: 1, card_id: "", financing_id: ""
       }); 
     }
   }, [item, open]);
@@ -38,8 +38,14 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
   const addItem = () => { if (newItem.nome && newItem.valor) { setForm(f => ({ ...f, itens: [...f.itens, { nome: newItem.nome, valor: Number(newItem.valor) }] })); setNewItem({ nome: "", valor: "" }); } };
   const removeItem = (i) => setForm(f => ({ ...f, itens: f.itens.filter((_, idx) => idx !== i) }));
   
+  const isFinanciamentoCategory = form.categoria_id === "__financing__";
+  const hasFinancings = financings && financings.length > 0;
+  
   const handleSave = async () => { 
-    if (!form.valor || !form.descricao || !form.categoria_id) return;
+    if (!form.valor || !form.descricao) return;
+    // For financing category, use selected financing's category or create a generic one
+    if (isFinanciamentoCategory && !form.financing_id) return;
+    if (!isFinanciamentoCategory && !form.categoria_id) return;
     
     const valorTotal = Number(form.valor);
     const parcelas = Number(form.parcelas) || 1;
@@ -59,14 +65,33 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
       }
     }
     
+    // Se for categoria Financiamento, pagar parcela customizada
+    if (isFinanciamentoCategory && form.financing_id && onPayFinancingCustom) {
+      try {
+        await onPayFinancingCustom(form.financing_id, valorTotal);
+      } catch (error) {
+        console.error('Error paying financing:', error);
+      }
+    }
+    
+    // Encontrar uma categoria real para salvar a transação
+    let catId = form.categoria_id;
+    if (isFinanciamentoCategory) {
+      // Usar a primeira categoria de despesa ou criar um fallback
+      const fallbackCat = categories.find(c => c.tipo === "despesa" || c.tipo === "ambos");
+      catId = fallbackCat?.id || "";
+    }
+    
     // Salvar a transação
-    onSave({ 
-      ...form, 
-      valor: valorTotal, 
-      tipo,
-      // Se for crédito parcelado, marcar como não pago (vai ser pago via fatura)
-      pago: form.metodo === "Crédito" ? false : form.pago
-    }); 
+    if (catId) {
+      onSave({ 
+        ...form, 
+        categoria_id: catId,
+        valor: valorTotal, 
+        tipo,
+        pago: form.metodo === "Crédito" ? false : form.pago
+      });
+    }
     onClose(); 
   };
   
@@ -83,7 +108,24 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
             <Field label="Valor Total" required><Inp data-testid="tx-modal-valor" type="number" step="0.01" placeholder="0,00" value={form.valor} onChange={e => setForm({...form, valor: e.target.value})} /></Field>
             <Field label="Data" required><Inp data-testid="tx-modal-data" type="date" value={form.data} onChange={e => setForm({...form, data: e.target.value})} className="[color-scheme:dark]" /></Field>
           </div>
-          <Field label="Categoria" required><Sel data-testid="tx-modal-categoria" value={form.categoria_id} onChange={e => setForm({...form, categoria_id: e.target.value})}><option value="">Selecione uma categoria</option>{filteredCats.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</Sel></Field>
+          <Field label="Categoria" required>
+            <Sel data-testid="tx-modal-categoria" value={form.categoria_id} onChange={e => setForm({...form, categoria_id: e.target.value, financing_id: e.target.value !== "__financing__" ? "" : form.financing_id})}>
+              <option value="">Selecione uma categoria</option>
+              {filteredCats.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              {tipo === "despesa" && hasFinancings && <option value="__financing__">Financiamento</option>}
+            </Sel>
+          </Field>
+          {/* Financing selector */}
+          {tipo === "despesa" && isFinanciamentoCategory && (
+            <Field label="Qual financiamento?" required>
+              <Sel data-testid="tx-modal-financing" value={form.financing_id} onChange={e => setForm({...form, financing_id: e.target.value})}>
+                <option value="">Selecione o financiamento</option>
+                {financings.filter(f => f.status === "ativo").map(f => (
+                  <option key={f.id} value={f.id}>{f.nome} (Parcela: {fmt(f.valor_parcela)} - {f.parcela_atual}/{f.parcelas})</option>
+                ))}
+              </Sel>
+            </Field>
+          )}
           <Field label="Descrição" required><Inp data-testid="tx-modal-descricao" placeholder="Descreva a transação" value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} /></Field>
           <Field label={tipo === "receita" ? "Método de Recebimento" : "Método de Pagamento"}>
             <Sel data-testid="tx-modal-metodo" value={form.metodo} onChange={e => setForm({...form, metodo: e.target.value, card_id: e.target.value !== "Crédito" ? "" : form.card_id})}>
@@ -147,7 +189,7 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
 }
 
 function TxPage({ tipo }) {
-  const { transactions, categories, tags, cards, createTransaction, updateTransaction, deleteTransaction, createInstallmentBatch } = useData();
+  const { transactions, categories, tags, cards, financings, createTransaction, updateTransaction, deleteTransaction, createInstallmentBatch, payFinancingCustom } = useData();
   const tx = useMemo(() => transactions.filter(t => t.tipo === tipo), [transactions, tipo]);
   const [modalOpen, setMO] = useState(false);
   const [editItem, setEI] = useState(null);
@@ -180,7 +222,7 @@ function TxPage({ tipo }) {
           {expId === t.id && t.itens?.length > 0 && (<div className="px-8 py-3 bg-white/[0.01] border-b border-white/[0.03]">{t.itens.map((it, i) => (<div key={i} className="flex justify-between py-1"><span className="text-white/40 text-xs">{it.nome}</span><span className="text-white/60 text-xs">{fmt(it.valor)}</span></div>))}</div>)}
         </div>))}
       </div>
-      <TransactionModal open={modalOpen} onClose={() => { setMO(false); setEI(null); }} onSave={save} item={editItem} tipo={tipo} categories={categories} tags={tags} cards={cards} onCreateInstallmentBatch={createInstallmentBatch} />
+      <TransactionModal open={modalOpen} onClose={() => { setMO(false); setEI(null); }} onSave={save} item={editItem} tipo={tipo} categories={categories} tags={tags} cards={cards} onCreateInstallmentBatch={createInstallmentBatch} financings={financings} onPayFinancingCustom={payFinancingCustom} />
     </div>
   );
 }

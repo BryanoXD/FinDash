@@ -289,7 +289,13 @@ export function DataProvider({ children, user }) {
 
   const payFinancingInstallment = async (id) => {
     const result = await api.financings.payInstallment(id);
-    // Reload financings
+    const updatedFinancings = await api.financings.getAll();
+    setFinancings(updatedFinancings);
+    return result;
+  };
+
+  const payFinancingCustom = async (id, valor) => {
+    const result = await api.financings.payCustom(id, valor);
     const updatedFinancings = await api.financings.getAll();
     setFinancings(updatedFinancings);
     return result;
@@ -381,7 +387,7 @@ export function DataProvider({ children, user }) {
     createCard, updateCard, deleteCard, payCardInvoice,
     createInstallment, createInstallmentBatch, payInstallment, deleteInstallment,
     createInvestment, updateInvestment, deleteInvestment, createContribution,
-    createFinancing, updateFinancing, deleteFinancing, payFinancingInstallment,
+    createFinancing, updateFinancing, deleteFinancing, payFinancingInstallment, payFinancingCustom,
     createBudget, updateBudget, deleteBudget,
     createGoal, updateGoal, deleteGoal, contributeToGoal,
     

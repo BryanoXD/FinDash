@@ -26,7 +26,7 @@ const menuItems = [
   { id: "despesas", label: "Despesas", icon: TrendingDown, path: "/dashboard/despesas" },
   { id: "categorias", label: "Categorias", icon: Tag, path: "/dashboard/categorias" },
   { id: "orcamento", label: "Orçamento", icon: PiggyBank, path: "/dashboard/orcamento" },
-  { id: "investments", label: "Investimentos", icon: LineChart, path: "/dashboard/investimentos" },
+  { id: "investments", label: "Invest. e Financ.", icon: LineChart, path: "/dashboard/investimentos" },
   { id: "simulador", label: "Simulador", icon: Calculator, path: "/dashboard/simulador" },
   { id: "accounts", label: "Contas e Cartões", icon: Landmark, path: "/dashboard/contas-cartoes" },
   { id: "heatmap", label: "Heatmap de Gastos", icon: Grid3X3, path: "/dashboard/heatmap" },

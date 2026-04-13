@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../../context/DataContext";
-import { TrendingUp, Plus, X, DollarSign, Calendar, Pencil, Trash2, Landmark, Home } from "lucide-react";
+import { TrendingUp, Plus, X, Minus, DollarSign, Calendar, Pencil, Trash2, Landmark, Home, Target } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -16,9 +16,10 @@ const Btn = ({ children, variant = "primary", ...rest }) => (<button {...rest} c
 
 export default function InvestmentsSection() {
   const {
-    investments, contributions, financings, accounts,
+    investments, contributions, financings, accounts, goals,
     createInvestment, updateInvestment, deleteInvestment, createContribution,
     createFinancing, updateFinancing, deleteFinancing, payFinancingInstallment,
+    createGoal, updateGoal, deleteGoal, contributeToGoal,
   } = useData();
 
   const [chartPeriod, setCP] = useState("1y");
@@ -27,10 +28,20 @@ export default function InvestmentsSection() {
   const [editInv, setEI] = useState(null);
   const [aporteModal, setAM] = useState(null);
   const [aporteVal, setAV] = useState("");
+  const [saqueModal, setSaqueModal] = useState(null);
+  const [saqueVal, setSaqueVal] = useState("");
   const [finModal, setFM] = useState(false);
   const [editFin, setEF] = useState(null);
   const [form, setForm] = useState({ nome: "", tipo: "", valor: "", rendimento: "", banco_id: "" });
   const [finForm, setFF] = useState({ nome: "", banco_id: "", valor_total: "", parcelas: "", valor_parcela: "", taxa: "" });
+  // Goals states
+  const [goalModal, setGoalModal] = useState(false);
+  const [editGoal, setEditGoal] = useState(null);
+  const [goalForm, setGoalForm] = useState({ nome: "", valor_meta: "", prazo: "" });
+  const [goalAporteId, setGoalAporteId] = useState(null);
+  const [goalAporteVal, setGoalAporteVal] = useState("");
+  const [goalSaqueId, setGoalSaqueId] = useState(null);
+  const [goalSaqueVal, setGoalSaqueVal] = useState("");
 
   const totalInv = investments.reduce((a, b) => a + b.valor, 0);
 
@@ -113,6 +124,47 @@ export default function InvestmentsSection() {
     } catch (e) { console.error(e); }
   };
 
+  const handleResgate = async (invId) => {
+    const val = Number(saqueVal);
+    if (!val || val <= 0) return;
+    try {
+      await createContribution({
+        investimento_id: invId,
+        valor: val,
+        data: new Date().toISOString().split("T")[0],
+        tipo: "resgate",
+      });
+      setSaqueVal(""); setSaqueModal(null);
+    } catch (e) { console.error(e); }
+  };
+
+  // Goals handlers
+  React.useEffect(() => {
+    if (editGoal) setGoalForm({ nome: editGoal.nome, valor_meta: editGoal.valor_meta, prazo: editGoal.prazo });
+    else setGoalForm({ nome: "", valor_meta: "", prazo: "" });
+  }, [editGoal, goalModal]);
+
+  const saveGoal = async () => {
+    if (!goalForm.nome || !goalForm.valor_meta) return;
+    try {
+      if (editGoal) await updateGoal(editGoal.id, { nome: goalForm.nome, valor_meta: Number(goalForm.valor_meta), prazo: goalForm.prazo });
+      else await createGoal({ nome: goalForm.nome, valor_meta: Number(goalForm.valor_meta), prazo: goalForm.prazo || "2026-12-31", icone: "Target" });
+      setGoalModal(false); setEditGoal(null);
+    } catch (e) { console.error(e); }
+  };
+
+  const handleGoalAporte = async (id) => {
+    const v = Number(goalAporteVal);
+    if (!v) return;
+    try { await contributeToGoal(id, v); setGoalAporteVal(""); setGoalAporteId(null); } catch(e) { console.error(e); }
+  };
+
+  const handleGoalSaque = async (id) => {
+    const v = Number(goalSaqueVal);
+    if (!v) return;
+    try { await contributeToGoal(id, -v); setGoalSaqueVal(""); setGoalSaqueId(null); } catch(e) { console.error(e); }
+  };
+
   const handleDeleteInv = async (id) => {
     try { await deleteInvestment(id); } catch (e) { console.error(e); }
   };
@@ -147,7 +199,7 @@ export default function InvestmentsSection() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div><h1 className="text-white text-2xl font-bold">Investimentos</h1><p className="text-white/40 text-sm mt-1">Acompanhe sua carteira</p></div>
+        <div><h1 className="text-white text-2xl font-bold">Investimentos e Financiamentos</h1><p className="text-white/40 text-sm mt-1">Acompanhe sua carteira</p></div>
         <div className="flex gap-2">
           <Btn variant="secondary" onClick={() => { setEF(null); setFM(true); }} data-testid="new-financing-btn"><Home className="w-4 h-4 inline mr-1" />Financiamento</Btn>
           <Btn onClick={() => { setEI(null); setMO(true); }} data-testid="new-investment-btn"><Plus className="w-4 h-4 inline mr-1" />Novo Investimento</Btn>
@@ -212,9 +264,16 @@ export default function InvestmentsSection() {
                         <button onClick={() => handleAporte(inv.id)} className="bg-emerald-500/20 text-emerald-400 text-xs font-medium px-3 py-2 rounded-lg hover:bg-emerald-500/30">OK</button>
                         <button onClick={() => { setAM(null); setAV(""); }} className="text-white/30 p-2"><X className="w-4 h-4" /></button>
                       </div>
+                    ) : saqueModal === inv.id ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        <Inp type="number" value={saqueVal} onChange={e => setSaqueVal(e.target.value)} placeholder="Valor" className="!py-2 text-xs" autoFocus />
+                        <button onClick={() => handleResgate(inv.id)} className="bg-red-500/20 text-red-400 text-xs font-medium px-3 py-2 rounded-lg hover:bg-red-500/30">OK</button>
+                        <button onClick={() => { setSaqueModal(null); setSaqueVal(""); }} className="text-white/30 p-2"><X className="w-4 h-4" /></button>
+                      </div>
                     ) : (
                       <>
                         <button onClick={() => setAM(inv.id)} className="flex items-center gap-1.5 text-white/50 text-xs border border-white/[0.08] px-3 py-2 rounded-lg hover:bg-white/[0.04]" data-testid={`aporte-btn-${inv.id}`}><Plus className="w-3.5 h-3.5" /> Aporte</button>
+                        {inv.valor > 0 && <button onClick={() => setSaqueModal(inv.id)} className="flex items-center gap-1.5 text-red-400/50 text-xs border border-red-500/10 px-3 py-2 rounded-lg hover:bg-red-500/10" data-testid={`resgate-btn-${inv.id}`}><Minus className="w-3.5 h-3.5" /> Resgate</button>}
                         <button onClick={() => setSH(showHistory === inv.id ? null : inv.id)} className="flex items-center gap-1.5 text-white/50 text-xs border border-white/[0.08] px-3 py-2 rounded-lg hover:bg-white/[0.04]"><Calendar className="w-3.5 h-3.5" /> Historico</button>
                       </>
                     )}
@@ -292,6 +351,72 @@ export default function InvestmentsSection() {
             </div>
           </div>
           <DialogFooter className="gap-2"><Btn variant="secondary" onClick={() => { setFM(false); setEF(null); }}>Cancelar</Btn><Btn data-testid="fin-modal-save" onClick={saveFin}>{editFin ? "Salvar" : "Criar"}</Btn></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Metas Financeiras Section */}
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-white text-xl font-bold">Metas Financeiras</h2>
+          <Btn onClick={() => { setEditGoal(null); setGoalModal(true); }} data-testid="new-goal-btn"><Plus className="w-4 h-4 inline mr-1" />Nova Meta</Btn>
+        </div>
+        {goals.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {goals.map(g => {
+              const pct = g.valor_meta > 0 ? Math.min((g.valor_atual / g.valor_meta) * 100, 100) : 0;
+              return (
+                <div key={g.id} className="bg-[#111111] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] transition-all" data-testid={`goal-card-${g.id}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2"><Target className="w-4 h-4 text-indigo-400" /><span className="text-white font-medium">{g.nome}</span></div>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setEditGoal(g); setGoalModal(true); }} className="text-white/30 hover:text-white/60"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button onClick={async () => { try { await deleteGoal(g.id); } catch(e) { console.error(e); } }} className="text-red-400/40 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+                  <div className="flex justify-between mb-2"><span className="text-white/40 text-xs">Progresso</span><span className="text-white/60 text-xs font-medium">{pct.toFixed(1)}%</span></div>
+                  <div className="w-full bg-white/[0.06] rounded-full h-2 mb-3"><div className="bg-indigo-400 h-2 rounded-full transition-all" style={{ width: `${pct}%` }} /></div>
+                  <div className="flex justify-between mb-4"><span className="text-white/40 text-xs">{fmt(g.valor_atual)}</span><span className="text-white/40 text-xs">{fmt(g.valor_meta)}</span></div>
+                  <div className="pt-3 border-t border-white/[0.06]">
+                    {goalAporteId === g.id ? (
+                      <div className="flex items-center gap-2">
+                        <Inp type="number" value={goalAporteVal} onChange={e => setGoalAporteVal(e.target.value)} placeholder="Valor" className="!py-2 text-xs" autoFocus />
+                        <button onClick={() => handleGoalAporte(g.id)} className="bg-emerald-500/20 text-emerald-400 text-xs font-medium px-3 py-2 rounded-lg">OK</button>
+                        <button onClick={() => { setGoalAporteId(null); setGoalAporteVal(""); }} className="text-white/30 p-2"><X className="w-4 h-4" /></button>
+                      </div>
+                    ) : goalSaqueId === g.id ? (
+                      <div className="flex items-center gap-2">
+                        <Inp type="number" value={goalSaqueVal} onChange={e => setGoalSaqueVal(e.target.value)} placeholder="Valor" className="!py-2 text-xs" autoFocus />
+                        <button onClick={() => handleGoalSaque(g.id)} className="bg-red-500/20 text-red-400 text-xs font-medium px-3 py-2 rounded-lg">OK</button>
+                        <button onClick={() => { setGoalSaqueId(null); setGoalSaqueVal(""); }} className="text-white/30 p-2"><X className="w-4 h-4" /></button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button onClick={() => setGoalAporteId(g.id)} className="flex-1 flex items-center justify-center gap-1 text-indigo-400 text-xs border border-indigo-500/20 px-3 py-2 rounded-lg hover:bg-indigo-500/10"><Plus className="w-3 h-3" /> Aporte</button>
+                        {g.valor_atual > 0 && <button onClick={() => setGoalSaqueId(g.id)} className="flex-1 flex items-center justify-center gap-1 text-red-400 text-xs border border-red-500/10 px-3 py-2 rounded-lg hover:bg-red-500/10"><Minus className="w-3 h-3" /> Sacar</button>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-8 text-center">
+            <p className="text-white/40 text-sm">Nenhuma meta cadastrada</p>
+          </div>
+        )}
+      </div>
+
+      {/* Goal Modal */}
+      <Dialog open={goalModal} onOpenChange={() => { setGoalModal(false); setEditGoal(null); }}>
+        <DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-md">
+          <DialogHeader><DialogTitle className="text-white">{editGoal ? "Editar" : "Nova"} Meta</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <Field label="Nome" required><Inp data-testid="goal-modal-nome" placeholder="Ex: Viagem" value={goalForm.nome} onChange={e => setGoalForm({...goalForm, nome: e.target.value})} /></Field>
+            <Field label="Valor Meta (R$)" required><Inp type="number" placeholder="10000" value={goalForm.valor_meta} onChange={e => setGoalForm({...goalForm, valor_meta: e.target.value})} /></Field>
+            <Field label="Prazo"><Inp type="date" value={goalForm.prazo} onChange={e => setGoalForm({...goalForm, prazo: e.target.value})} className="[color-scheme:dark]" /></Field>
+          </div>
+          <DialogFooter className="gap-2"><Btn variant="secondary" onClick={() => { setGoalModal(false); setEditGoal(null); }}>Cancelar</Btn><Btn data-testid="goal-modal-save" onClick={saveGoal}>{editGoal ? "Salvar" : "Criar"}</Btn></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -1,0 +1,75 @@
+{
+  "summary": "Iteration 5 testing complete: All 4 new feature requests verified. Backend: GET /api/health returns healthy, POST /api/financings/{id}/pay-custom accepts {valor} and updates financing, POST /api/goals/{id}/contribute supports negative values for withdrawal (saque). Frontend: Dashboard Due Cards (Vencidos/Vencendo/Futuro) are clickable and open modals with transaction lists, Saldo Total card is clickable and opens modal with account breakdown, Metas Financeiras section has Aporte and Sacar buttons, Investimentos page title shows 'Investimentos e Financiamentos', Investimentos page has Metas Financeiras section with goals/aporte/saque, Resgate button appears on investment cards with valor > 0, Sidebar shows 'Invest. e Financ.' instead of 'Investimentos', TransactionModal for despesa shows 'Financiamento' category option when financings exist, selecting Financiamento shows financing selector dropdown.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Charts on Dashboard/Investimentos",
+        "issues": ["Console warnings about chart dimensions during initial render - cosmetic only, does not affect functionality"]
+      },
+      {
+        "screen": "Dialog components",
+        "issues": ["Console warnings about missing aria-describedby for DialogContent - accessibility improvement opportunity"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_5.json"
+  ],
+  "passed_tests": [
+    "Backend: GET /api/health - returns healthy status with database connected",
+    "Backend: POST /api/financings/{id}/pay-custom - accepts {valor} and updates valor_pago, parcela_atual, status",
+    "Backend: POST /api/goals/{id}/contribute - supports positive values (aporte) and negative values (saque/withdrawal)",
+    "Backend: Goal withdrawal floors at 0 (cannot go negative)",
+    "Frontend: Dashboard - Vencidos card is clickable and opens modal with 'Contas Vencidas' title",
+    "Frontend: Dashboard - Vencendo card is clickable and opens modal with 'Contas Vencendo Hoje' title",
+    "Frontend: Dashboard - Futuro card is clickable and opens modal with 'Contas Futuras (7 dias)' title",
+    "Frontend: Dashboard - Saldo Total card is clickable and opens modal with 'Composicao do Saldo Total' showing Receitas, Despesas, and Total",
+    "Frontend: Dashboard - Metas Financeiras section has 'Aporte' button with data-testid='goal-aporte-{id}'",
+    "Frontend: Dashboard - Metas Financeiras section has 'Sacar' button with data-testid='goal-saque-{id}' (when valor_atual > 0)",
+    "Frontend: Investimentos page title shows 'Investimentos e Financiamentos'",
+    "Frontend: Investimentos page has Metas Financeiras section with goals",
+    "Frontend: Investimentos page has 'Nova Meta' button with data-testid='new-goal-btn'",
+    "Frontend: Investimentos page has 'Resgate' button on investment cards (when valor > 0) with data-testid='resgate-btn-{id}'",
+    "Frontend: Sidebar shows 'Invest. e Financ.' instead of 'Investimentos'",
+    "Frontend: TransactionModal for despesa shows 'Financiamento' category option (value='__financing__') when financings exist",
+    "Frontend: Selecting 'Financiamento' category shows financing selector dropdown with data-testid='tx-modal-financing'"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All 4 feature requests implemented correctly",
+    "data-testid attributes properly implemented for all new interactive elements",
+    "Backend pay-custom endpoint correctly updates financing state",
+    "Goal contribute endpoint correctly handles negative values with floor at 0",
+    "TransactionModal correctly shows Financiamento option only when financings exist",
+    "Resgate button correctly shows only when investment valor > 0"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (all endpoints tested and working)",
+    "frontend": "100% (all 4 feature requests verified)"
+  },
+  "test_credentials": "session_token=test_session_iter5_1776096803957 (cleaned up after testing)",
+  "seed_data_creation": "Created test user with financing (Test Financing), goal (Test Goal), category (Alimentacao), and investment (Test Investment for Resgate) for testing - all cleaned up after tests",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 5 verified all 4 new feature requests: (1) Dashboard cards clickable with modals, Saldo Total clickable with breakdown, Metas with saque option; (2) Investimentos page has Metas section + Resgate button; (3) TransactionModal shows Financiamento category with financing selector; (4) Sidebar renamed to 'Invest. e Financ.'. Key data-testid attributes: goal-aporte-{id}, goal-saque-{id}, new-goal-btn, goal-card-{id}, resgate-btn-{id}, tx-modal-financing, tx-modal-categoria (includes __financing__ option). Backend endpoints: POST /api/financings/{id}/pay-custom accepts {valor}, POST /api/goals/{id}/contribute accepts negative values for withdrawal.",
+  "business_rules_verified": {
+    "due_cards_clickable": "VERIFIED - Vencidos/Vencendo/Futuro cards open modals with transaction lists",
+    "saldo_total_clickable": "VERIFIED - Opens modal showing Receitas, Despesas, Contas Bancarias, Investimentos, and Total",
+    "metas_saque_option": "VERIFIED - Sacar button appears when goal valor_atual > 0",
+    "investimentos_page_title": "VERIFIED - Shows 'Investimentos e Financiamentos'",
+    "investimentos_metas_section": "VERIFIED - Metas Financeiras section with goals, aporte, and saque",
+    "resgate_button": "VERIFIED - Appears on investment cards when valor > 0",
+    "sidebar_renamed": "VERIFIED - Shows 'Invest. e Financ.' instead of 'Investimentos'",
+    "financiamento_category": "VERIFIED - Shows in despesa category dropdown when financings exist",
+    "financing_selector": "VERIFIED - Appears when Financiamento category is selected",
+    "pay_custom_endpoint": "VERIFIED - POST /api/financings/{id}/pay-custom updates valor_pago and parcela_atual",
+    "goal_negative_contribute": "VERIFIED - POST /api/goals/{id}/contribute accepts negative values for withdrawal with floor at 0"
+  }
+}

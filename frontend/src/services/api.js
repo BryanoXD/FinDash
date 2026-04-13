@@ -243,6 +243,12 @@ export const financingsAPI = {
   
   payInstallment: (id) =>
     apiCall(`/api/financings/${id}/pay-installment`, { method: 'POST' }),
+  
+  payCustom: (id, valor) =>
+    apiCall(`/api/financings/${id}/pay-custom`, {
+      method: 'POST',
+      body: JSON.stringify({ valor }),
+    }),
 };
 
 // ============== BUDGETS ==============

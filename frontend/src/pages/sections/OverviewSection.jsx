@@ -4,13 +4,14 @@ import {
   TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownLeft,
   Eye, EyeOff, Plus, DollarSign, Briefcase, Home, ShoppingCart,
   Tv, Car, Heart, GraduationCap, AlertTriangle, CalendarClock, Clock,
-  Target, Shield, ArrowRight,
+  Target, Shield, ArrowRight, X, Minus,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart as RechartsPie, Pie, Cell,
+  ResponsiveContainer,
 } from "recharts";
 import { TransactionModal } from "./OtherSections";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 
 const iconMap = { Briefcase, Home, ShoppingCart, Tv, Car, Heart, GraduationCap, TrendingUp, ArrowDownLeft, Palette: Briefcase, Target, Shield, DollarSign };
 
@@ -40,9 +41,9 @@ function SummaryCard({ title, value, variacao, icon: Icon, iconColor, showBalanc
   );
 }
 
-function DueCard({ title, subtitle, icon: Icon, iconBg, receitas, despesas }) {
+function DueCard({ title, subtitle, icon: Icon, iconBg, receitas, despesas, onClick }) {
   return (
-    <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] transition-all duration-300">
+    <div onClick={onClick} className="bg-[#111111] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] transition-all duration-300 cursor-pointer">
       <div className="flex items-center gap-3 mb-5">
         <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${iconBg}`}>
           <Icon className="w-4 h-4" />
@@ -67,13 +68,17 @@ function DueCard({ title, subtitle, icon: Icon, iconBg, receitas, despesas }) {
 }
 
 export default function OverviewSection() {
-  const { user, transactions, categories, tags, cards, investments, goals, contributeToGoal, createTransaction, createInstallmentBatch } = useData();
+  const { user, transactions, categories, tags, cards, accounts, investments, financings, goals, contributeToGoal, createTransaction, createInstallmentBatch, payFinancingCustom } = useData();
   const [showBalance, setShowBalance] = useState(true);
   const [chartPeriod, setChartPeriod] = useState("6m");
   const [aporteGoalId, setAporteGoalId] = useState(null);
   const [aporteValue, setAporteValue] = useState("");
+  const [saqueGoalId, setSaqueGoalId] = useState(null);
+  const [saqueValue, setSaqueValue] = useState("");
   const [showNewTx, setShowNewTx] = useState(false);
   const [newTxTipo, setNewTxTipo] = useState("despesa");
+  const [dueModal, setDueModal] = useState(null); // 'vencidos' | 'vencendo' | 'futuro' | null
+  const [saldoModal, setSaldoModal] = useState(false);
 
   // Calculate summary from real data
   const summary = useMemo(() => {
@@ -165,29 +170,32 @@ export default function OverviewSection() {
     })).sort((a, b) => b.valor - a.valor).slice(0, 6);
   }, [transactions]);
 
-  // Due items (last 7 days, today, next 7 days)
+  // Due items (last 7 days, today, next 7 days) - with full transaction lists
   const dueItems = useMemo(() => {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
     const past7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const future7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const vencidos = transactions.filter(t => t.data < past7);
-    const vencendo = transactions.filter(t => t.data === today);
-    const futuro = transactions.filter(t => t.data > today && t.data <= future7);
+    const vencidosTx = transactions.filter(t => t.data < past7 && !t.pago);
+    const vencendoTx = transactions.filter(t => t.data === today);
+    const futuroTx = transactions.filter(t => t.data > today && t.data <= future7);
 
     return {
       vencidos: { 
-        receitas: vencidos.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0),
-        despesas: vencidos.filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0),
+        receitas: vencidosTx.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0),
+        despesas: vencidosTx.filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0),
+        items: vencidosTx,
       },
       vencendo: {
-        receitas: vencendo.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0),
-        despesas: vencendo.filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0),
+        receitas: vencendoTx.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0),
+        despesas: vencendoTx.filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0),
+        items: vencendoTx,
       },
       futuro: {
-        receitas: futuro.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0),
-        despesas: futuro.filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0),
+        receitas: futuroTx.filter(t => t.tipo === 'receita').reduce((s, t) => s + t.valor, 0),
+        despesas: futuroTx.filter(t => t.tipo === 'despesa').reduce((s, t) => s + t.valor, 0),
+        items: futuroTx,
       },
     };
   }, [transactions]);
@@ -202,6 +210,24 @@ export default function OverviewSection() {
       console.error('Error contributing to goal:', error);
     }
   };
+
+  const handleSaque = async () => {
+    if (!saqueValue || isNaN(Number(saqueValue)) || !saqueGoalId) return;
+    try {
+      await contributeToGoal(saqueGoalId, -Number(saqueValue));
+      setSaqueValue("");
+      setSaqueGoalId(null);
+    } catch (error) {
+      console.error('Error withdrawing from goal:', error);
+    }
+  };
+
+  // Saldo breakdown for modal
+  const saldoBreakdown = useMemo(() => {
+    const accountTotals = accounts.map(a => ({ nome: a.nome, tipo: a.tipo, valor: a.saldo, cor: a.cor }));
+    const investTotal = investments.reduce((s, i) => s + i.valor, 0);
+    return { accounts: accountTotals, investimentos: investTotal };
+  }, [accounts, investments]);
 
   const handleSaveTransaction = async (item) => {
     try {
@@ -237,14 +263,16 @@ export default function OverviewSection() {
 
       {/* Due Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <DueCard title="Vencidos" subtitle="Últimos 7 dias" icon={AlertTriangle} iconBg="bg-red-500/20 text-red-400" receitas={dueItems.vencidos.receitas} despesas={dueItems.vencidos.despesas} />
-        <DueCard title="Vencendo" subtitle="Hoje" icon={CalendarClock} iconBg="bg-amber-500/20 text-amber-400" receitas={dueItems.vencendo.receitas} despesas={dueItems.vencendo.despesas} />
-        <DueCard title="Futuro" subtitle="Próximos 7 dias" icon={Clock} iconBg="bg-blue-500/20 text-blue-400" receitas={dueItems.futuro.receitas} despesas={dueItems.futuro.despesas} />
+        <DueCard title="Vencidos" subtitle="Contas nao pagas" icon={AlertTriangle} iconBg="bg-red-500/20 text-red-400" receitas={dueItems.vencidos.receitas} despesas={dueItems.vencidos.despesas} onClick={() => setDueModal('vencidos')} />
+        <DueCard title="Vencendo" subtitle="Hoje" icon={CalendarClock} iconBg="bg-amber-500/20 text-amber-400" receitas={dueItems.vencendo.receitas} despesas={dueItems.vencendo.despesas} onClick={() => setDueModal('vencendo')} />
+        <DueCard title="Futuro" subtitle="Proximos 7 dias" icon={Clock} iconBg="bg-blue-500/20 text-blue-400" receitas={dueItems.futuro.receitas} despesas={dueItems.futuro.despesas} onClick={() => setDueModal('futuro')} />
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <SummaryCard title="Saldo Total" value={summary.saldoTotal} variacao={summary.varSaldo} icon={Wallet} iconColor="bg-indigo-500/20 text-indigo-400" showBalance={showBalance} />
+        <div onClick={() => setSaldoModal(true)} className="cursor-pointer">
+          <SummaryCard title="Saldo Total" value={summary.saldoTotal} variacao={summary.varSaldo} icon={Wallet} iconColor="bg-indigo-500/20 text-indigo-400" showBalance={showBalance} />
+        </div>
         <SummaryCard title="Receitas" value={summary.receitas} variacao={summary.varReceitas} icon={ArrowDownLeft} iconColor="bg-emerald-500/20 text-emerald-400" showBalance={showBalance} />
         <SummaryCard title="Despesas" value={summary.despesas} variacao={summary.varDespesas} icon={ArrowUpRight} iconColor="bg-red-500/20 text-red-400" showBalance={showBalance} />
         <SummaryCard title="Investimentos" value={summary.investimentos} variacao={summary.varInvest} icon={TrendingUp} iconColor="bg-purple-500/20 text-purple-400" showBalance={showBalance} />
@@ -386,16 +414,44 @@ export default function OverviewSection() {
                         OK
                       </button>
                       <button onClick={() => { setAporteGoalId(null); setAporteValue(""); }} className="text-white/40 hover:text-white/60 text-sm px-2">
-                        ✕
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : saqueGoalId === goal.id ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        value={saqueValue}
+                        onChange={(e) => setSaqueValue(e.target.value)}
+                        placeholder="Valor"
+                        className="flex-1 bg-white/[0.04] border border-red-500/20 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-red-500/30"
+                      />
+                      <button onClick={handleSaque} className="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-2 rounded-lg transition-colors">
+                        OK
+                      </button>
+                      <button onClick={() => { setSaqueGoalId(null); setSaqueValue(""); }} className="text-white/40 hover:text-white/60 text-sm px-2">
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => setAporteGoalId(goal.id)}
-                      className="w-full text-center text-indigo-400 hover:text-indigo-300 text-sm font-medium py-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
-                    >
-                      + Fazer Aporte
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setAporteGoalId(goal.id)}
+                        className="flex-1 text-center text-indigo-400 hover:text-indigo-300 text-sm font-medium py-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors"
+                        data-testid={`goal-aporte-${goal.id}`}
+                      >
+                        <Plus className="w-3.5 h-3.5 inline mr-1" />Aporte
+                      </button>
+                      {goal.valor_atual > 0 && (
+                        <button
+                          onClick={() => setSaqueGoalId(goal.id)}
+                          className="flex-1 text-center text-red-400 hover:text-red-300 text-sm font-medium py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition-colors"
+                          data-testid={`goal-saque-${goal.id}`}
+                        >
+                          <Minus className="w-3.5 h-3.5 inline mr-1" />Sacar
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               );
@@ -417,6 +473,8 @@ export default function OverviewSection() {
         tags={tags}
         cards={cards}
         onCreateInstallmentBatch={createInstallmentBatch}
+        financings={financings}
+        onPayFinancingCustom={payFinancingCustom}
       />
       
       {/* Tipo selector for new transaction */}
@@ -436,6 +494,93 @@ export default function OverviewSection() {
           </button>
         </div>
       )}
+
+      {/* Due Items Modal */}
+      <Dialog open={!!dueModal} onOpenChange={() => setDueModal(null)}>
+        <DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white">
+              {dueModal === 'vencidos' && 'Contas Vencidas'}
+              {dueModal === 'vencendo' && 'Contas Vencendo Hoje'}
+              {dueModal === 'futuro' && 'Contas Futuras (7 dias)'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {dueModal && dueItems[dueModal]?.items?.length > 0 ? (
+              dueItems[dueModal].items.map(t => (
+                <div key={t.id} className="flex items-center justify-between py-3 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                  <div className="flex-1">
+                    <p className="text-white text-sm font-medium">{t.descricao}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-white/30 text-xs">{new Date(t.data).toLocaleDateString("pt-BR")}</span>
+                      <span className="text-white/20 text-xs">{t.categoria}</span>
+                      {!t.pago && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">Pendente</span>}
+                    </div>
+                  </div>
+                  <span className={`text-sm font-semibold ${t.tipo === 'receita' ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {t.tipo === 'receita' ? '+' : '-'}{formatCurrency(t.valor)}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-white/40 text-sm text-center py-6">Nenhuma conta encontrada</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Saldo Total Modal */}
+      <Dialog open={saldoModal} onOpenChange={() => setSaldoModal(false)}>
+        <DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-white">Composicao do Saldo Total</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="flex items-center justify-between py-3 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                <span className="text-white text-sm">Receitas</span>
+              </div>
+              <span className="text-emerald-400 text-sm font-semibold">{formatCurrency(summary.receitas)}</span>
+            </div>
+            <div className="flex items-center justify-between py-3 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+              <div className="flex items-center gap-2">
+                <TrendingDown className="w-4 h-4 text-red-400" />
+                <span className="text-white text-sm">Despesas</span>
+              </div>
+              <span className="text-red-400 text-sm font-semibold">-{formatCurrency(summary.despesas)}</span>
+            </div>
+            {saldoBreakdown.accounts.length > 0 && (
+              <>
+                <p className="text-white/40 text-xs font-medium pt-2">Contas Bancarias</p>
+                {saldoBreakdown.accounts.map((a, i) => (
+                  <div key={i} className="flex items-center justify-between py-3 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: a.cor || '#6366f1' }} />
+                      <span className="text-white text-sm">{a.nome}</span>
+                      <span className="text-white/30 text-xs">{a.tipo}</span>
+                    </div>
+                    <span className="text-white text-sm font-semibold">{formatCurrency(a.valor)}</span>
+                  </div>
+                ))}
+              </>
+            )}
+            {saldoBreakdown.investimentos > 0 && (
+              <div className="flex items-center justify-between py-3 px-3 rounded-lg bg-purple-500/5 border border-purple-500/10">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-purple-400" />
+                  <span className="text-white text-sm">Investimentos</span>
+                </div>
+                <span className="text-purple-400 text-sm font-semibold">{formatCurrency(saldoBreakdown.investimentos)}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between py-3 px-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 mt-2">
+              <span className="text-white font-medium">Total</span>
+              <span className="text-white font-bold text-lg">{formatCurrency(summary.saldoTotal)}</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
