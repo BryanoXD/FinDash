@@ -1,7 +1,7 @@
 # FinDash - Product Requirements Document
 
 ## Original Problem Statement
-Clone do FinPulse (https://finpulse-92.preview.emergentagent.com/) - aplicação de gestão financeira pessoal completa em português brasileiro.
+Clone do FinPulse (https://parcel-manager-26.preview.emergentagent.com/) - aplicação de gestão financeira pessoal completa em português brasileiro.
 
 ## User Persona
 - Usuários brasileiros que desejam gerenciar suas finanças pessoais

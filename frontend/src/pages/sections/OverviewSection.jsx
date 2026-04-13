@@ -10,7 +10,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart as RechartsPie, Pie, Cell,
 } from "recharts";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
+import { TransactionModal } from "./OtherSections";
 
 const iconMap = { Briefcase, Home, ShoppingCart, Tv, Car, Heart, GraduationCap, TrendingUp, ArrowDownLeft, Palette: Briefcase, Target, Shield, DollarSign };
 
@@ -67,13 +67,13 @@ function DueCard({ title, subtitle, icon: Icon, iconBg, receitas, despesas }) {
 }
 
 export default function OverviewSection() {
-  const { user, transactions, categories, investments, goals, contributeToGoal, createTransaction } = useData();
+  const { user, transactions, categories, tags, cards, investments, goals, contributeToGoal, createTransaction, createInstallment } = useData();
   const [showBalance, setShowBalance] = useState(true);
   const [chartPeriod, setChartPeriod] = useState("6m");
   const [aporteGoalId, setAporteGoalId] = useState(null);
   const [aporteValue, setAporteValue] = useState("");
   const [showNewTx, setShowNewTx] = useState(false);
-  const [newTxForm, setNewTxForm] = useState({ descricao: '', valor: '', tipo: 'despesa', categoria_id: '', data: new Date().toISOString().split('T')[0] });
+  const [newTxTipo, setNewTxTipo] = useState("despesa");
 
   // Calculate summary from real data
   const summary = useMemo(() => {
@@ -203,18 +203,10 @@ export default function OverviewSection() {
     }
   };
 
-  const handleCreateTransaction = async () => {
-    if (!newTxForm.descricao || !newTxForm.valor || !newTxForm.categoria_id) return;
+  const handleSaveTransaction = async (item) => {
     try {
-      await createTransaction({
-        ...newTxForm,
-        valor: Number(newTxForm.valor),
-        pago: true,
-        recorrente: false,
-        tags: [],
-      });
+      await createTransaction(item);
       setShowNewTx(false);
-      setNewTxForm({ descricao: '', valor: '', tipo: 'despesa', categoria_id: '', data: new Date().toISOString().split('T')[0] });
     } catch (error) {
       console.error('Error creating transaction:', error);
     }
@@ -415,82 +407,35 @@ export default function OverviewSection() {
       </div>
 
       {/* New Transaction Modal */}
-      <Dialog open={showNewTx} onOpenChange={setShowNewTx}>
-        <DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-white">Nova Transação</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <label className="text-white/50 text-sm mb-1 block">Tipo</label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setNewTxForm({ ...newTxForm, tipo: 'receita' })}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${newTxForm.tipo === 'receita' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-white/[0.04] text-white/60 border border-white/[0.08]'}`}
-                >
-                  Receita
-                </button>
-                <button
-                  onClick={() => setNewTxForm({ ...newTxForm, tipo: 'despesa' })}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${newTxForm.tipo === 'despesa' ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'bg-white/[0.04] text-white/60 border border-white/[0.08]'}`}
-                >
-                  Despesa
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="text-white/50 text-sm mb-1 block">Descrição *</label>
-              <input
-                type="text"
-                value={newTxForm.descricao}
-                onChange={(e) => setNewTxForm({ ...newTxForm, descricao: e.target.value })}
-                placeholder="Ex: Salário, Aluguel..."
-                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/[0.16]"
-              />
-            </div>
-            <div>
-              <label className="text-white/50 text-sm mb-1 block">Valor (R$) *</label>
-              <input
-                type="number"
-                value={newTxForm.valor}
-                onChange={(e) => setNewTxForm({ ...newTxForm, valor: e.target.value })}
-                placeholder="0,00"
-                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/[0.16]"
-              />
-            </div>
-            <div>
-              <label className="text-white/50 text-sm mb-1 block">Categoria *</label>
-              <select
-                value={newTxForm.categoria_id}
-                onChange={(e) => setNewTxForm({ ...newTxForm, categoria_id: e.target.value })}
-                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-white/[0.16]"
-              >
-                <option value="">Selecione...</option>
-                {categories.filter(c => c.tipo === newTxForm.tipo || c.tipo === 'ambos').map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.nome}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-white/50 text-sm mb-1 block">Data</label>
-              <input
-                type="date"
-                value={newTxForm.data}
-                onChange={(e) => setNewTxForm({ ...newTxForm, data: e.target.value })}
-                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-white/[0.16]"
-              />
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <button onClick={() => setShowNewTx(false)} className="px-4 py-2 text-white/60 hover:text-white/80 text-sm transition-colors">
-              Cancelar
-            </button>
-            <button onClick={handleCreateTransaction} className="bg-white text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
-              Criar
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TransactionModal
+        open={showNewTx}
+        onClose={() => setShowNewTx(false)}
+        onSave={handleSaveTransaction}
+        item={null}
+        tipo={newTxTipo}
+        categories={categories}
+        tags={tags}
+        cards={cards}
+        onCreateInstallment={createInstallment}
+      />
+      
+      {/* Tipo selector for new transaction */}
+      {showNewTx && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] bg-[#1a1a1a] border border-white/[0.1] rounded-full p-1 flex gap-1 shadow-xl">
+          <button
+            onClick={() => setNewTxTipo('receita')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${newTxTipo === 'receita' ? 'bg-emerald-500/20 text-emerald-400' : 'text-white/40 hover:text-white/60'}`}
+          >
+            Receita
+          </button>
+          <button
+            onClick={() => setNewTxTipo('despesa')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${newTxTipo === 'despesa' ? 'bg-red-500/20 text-red-400' : 'text-white/40 hover:text-white/60'}`}
+          >
+            Despesa
+          </button>
+        </div>
+      )}
     </div>
   );
 }
