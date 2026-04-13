@@ -6,8 +6,11 @@ from fastapi import APIRouter, HTTPException, Request
 from typing import List
 from models import (
     CreditCard, CreditCardCreate, CreditCardUpdate,
-    CardInstallment, CardInstallmentCreate, CardInstallmentUpdate
+    CardInstallment, CardInstallmentCreate, CardInstallmentUpdate,
+    CardInstallmentBatchCreate
 )
+from dateutil.relativedelta import relativedelta
+from datetime import datetime
 
 router = APIRouter(prefix="/cards", tags=["cards"])
 
@@ -228,3 +231,49 @@ async def delete_installment(installment_id: str, request: Request, db=None, use
     await recalculate_card_totals(card_id, user_id, db)
     
     return {"message": "Installment deleted"}
+
+
+@router.post("/installments/batch")
+async def create_installment_batch(data: CardInstallmentBatchCreate, request: Request, db=None, user_id: str = None):
+    """
+    Create multiple installments for a credit card purchase
+    REGRA: Gera N parcelas mensais, deduz valor_total do limite do cartão
+    """
+    card = await db.cards.find_one({"id": data.card_id, "user_id": user_id}, {"_id": 0})
+    if not card:
+        raise HTTPException(status_code=400, detail="Card not found")
+    
+    valor_parcela = round(data.valor_total / data.total_parcelas, 2)
+    created = []
+    
+    base_date = datetime.strptime(data.data, "%Y-%m-%d")
+    
+    for i in range(data.total_parcelas):
+        install_date = (base_date + relativedelta(months=i)).strftime("%Y-%m-%d")
+        
+        installment = CardInstallment(
+            user_id=user_id,
+            card_id=data.card_id,
+            descricao=data.descricao,
+            valor_parcela=valor_parcela,
+            parcela_atual=i + 1,
+            total_parcelas=data.total_parcelas,
+            valor_total=data.valor_total,
+            data=install_date,
+            pago=False
+        )
+        doc = installment.model_dump()
+        doc["created_at"] = doc["created_at"].isoformat()
+        await db.installments.insert_one(doc)
+        created.append(installment)
+    
+    # Recalcula totais do cartão uma vez no final
+    totals = await recalculate_card_totals(data.card_id, user_id, db)
+    
+    return {
+        "message": f"{data.total_parcelas} parcelas criadas",
+        "count": data.total_parcelas,
+        "valor_parcela": valor_parcela,
+        "fatura_atual": totals["fatura_atual"],
+        "usado": totals["usado"]
+    }

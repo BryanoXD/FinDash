@@ -169,6 +169,12 @@ export const cardsAPI = {
       body: JSON.stringify(data),
     }),
   
+  createInstallmentBatch: (data) =>
+    apiCall('/api/cards/installments/batch', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
   updateInstallment: (id, data) =>
     apiCall(`/api/cards/installments/${id}`, {
       method: 'PUT',

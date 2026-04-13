@@ -231,6 +231,14 @@ class CardInstallmentUpdate(BaseModel):
     pago: Optional[bool] = None
 
 
+class CardInstallmentBatchCreate(BaseModel):
+    card_id: str
+    descricao: str
+    valor_total: float
+    total_parcelas: int
+    data: str
+
+
 # ============== INVESTMENT MODELS ==============
 class Investment(BaseModel):
     model_config = ConfigDict(extra="ignore")

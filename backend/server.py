@@ -398,6 +398,12 @@ async def delete_installment(installment_id: str, request: Request):
     return await cards.delete_installment(installment_id, request, db=db, user_id=user_id)
 
 
+@app.post("/api/cards/installments/batch")
+async def create_installment_batch(data: cards.CardInstallmentBatchCreate, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await cards.create_installment_batch(data, request, db=db, user_id=user_id)
+
+
 # ============== INVESTMENTS ROUTES ==============
 @app.get("/api/investments")
 async def get_investments(request: Request):

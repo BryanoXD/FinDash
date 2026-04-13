@@ -67,7 +67,7 @@ function DueCard({ title, subtitle, icon: Icon, iconBg, receitas, despesas }) {
 }
 
 export default function OverviewSection() {
-  const { user, transactions, categories, tags, cards, investments, goals, contributeToGoal, createTransaction, createInstallment } = useData();
+  const { user, transactions, categories, tags, cards, investments, goals, contributeToGoal, createTransaction, createInstallmentBatch } = useData();
   const [showBalance, setShowBalance] = useState(true);
   const [chartPeriod, setChartPeriod] = useState("6m");
   const [aporteGoalId, setAporteGoalId] = useState(null);
@@ -416,7 +416,7 @@ export default function OverviewSection() {
         categories={categories}
         tags={tags}
         cards={cards}
-        onCreateInstallment={createInstallment}
+        onCreateInstallmentBatch={createInstallmentBatch}
       />
       
       {/* Tipo selector for new transaction */}

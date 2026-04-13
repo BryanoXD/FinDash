@@ -209,6 +209,18 @@ export function DataProvider({ children, user }) {
     return newInst;
   };
 
+  const createInstallmentBatch = async (data) => {
+    const result = await api.cards.createInstallmentBatch(data);
+    // Reload cards and installments to get updated totals
+    const [updatedCards, updatedInstallments] = await Promise.all([
+      api.cards.getAll(),
+      api.cards.getAllInstallments(),
+    ]);
+    setCards(updatedCards);
+    setInstallments(updatedInstallments);
+    return result;
+  };
+
   const payInstallment = async (id) => {
     const result = await api.cards.payInstallment(id);
     // Reload cards and installments
@@ -367,7 +379,7 @@ export function DataProvider({ children, user }) {
     createTransaction, updateTransaction, deleteTransaction, toggleTransactionPaid,
     createAccount, updateAccount, deleteAccount,
     createCard, updateCard, deleteCard, payCardInvoice,
-    createInstallment, payInstallment, deleteInstallment,
+    createInstallment, createInstallmentBatch, payInstallment, deleteInstallment,
     createInvestment, updateInvestment, deleteInvestment, createContribution,
     createFinancing, updateFinancing, deleteFinancing, payFinancingInstallment,
     createBudget, updateBudget, deleteBudget,

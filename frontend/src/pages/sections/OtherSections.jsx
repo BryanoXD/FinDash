@@ -14,7 +14,7 @@ const Inp = (props) => (<input {...props} className={`w-full bg-white/[0.06] bor
 const Sel = ({ children, ...rest }) => (<select {...rest} className={`w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/20 [&>option]:bg-[#1a1a1a] ${rest.className || ""}`}>{children}</select>);
 const Btn = ({ children, variant = "primary", ...rest }) => (<button {...rest} className={`text-sm font-medium px-4 py-2.5 rounded-lg transition-colors ${variant === "primary" ? "bg-white text-black hover:bg-gray-100" : "text-white/40 border border-white/[0.08] hover:bg-white/[0.04]"}`}>{children}</button>);
 
-function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags, cards, onCreateInstallment }) {
+function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags, cards, onCreateInstallmentBatch }) {
   const [form, setForm] = useState({ 
     valor: "", data: new Date().toISOString().split("T")[0], categoria_id: "", descricao: "", 
     metodo: "", tags: [], recorrente: false, pago: true, detalhado: false, itens: [],
@@ -43,23 +43,19 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
     
     const valorTotal = Number(form.valor);
     const parcelas = Number(form.parcelas) || 1;
-    const valorParcela = valorTotal / parcelas;
     
-    // Se for crédito e tiver cartão selecionado, criar parcelas no cartão
-    if (form.metodo === "Crédito" && form.card_id && tipo === "despesa" && onCreateInstallment) {
+    // Se for crédito e tiver cartão selecionado, criar parcelas no cartão via batch
+    if (form.metodo === "Crédito" && form.card_id && tipo === "despesa" && onCreateInstallmentBatch) {
       try {
-        // Criar parcela no cartão
-        await onCreateInstallment({
+        await onCreateInstallmentBatch({
           card_id: form.card_id,
           descricao: form.descricao,
-          valor_parcela: valorParcela,
-          parcela_atual: 1,
-          total_parcelas: parcelas,
           valor_total: valorTotal,
+          total_parcelas: parcelas,
           data: form.data
         });
       } catch (error) {
-        console.error('Error creating installment:', error);
+        console.error('Error creating installments:', error);
       }
     }
     
@@ -84,13 +80,13 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
         <DialogHeader><DialogTitle className="text-white text-lg">{item ? "Editar" : tipo === "receita" ? "Nova Receita" : "Nova Despesa"}</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Valor Total" required><Inp type="number" step="0.01" placeholder="0,00" value={form.valor} onChange={e => setForm({...form, valor: e.target.value})} /></Field>
-            <Field label="Data" required><Inp type="date" value={form.data} onChange={e => setForm({...form, data: e.target.value})} className="[color-scheme:dark]" /></Field>
+            <Field label="Valor Total" required><Inp data-testid="tx-modal-valor" type="number" step="0.01" placeholder="0,00" value={form.valor} onChange={e => setForm({...form, valor: e.target.value})} /></Field>
+            <Field label="Data" required><Inp data-testid="tx-modal-data" type="date" value={form.data} onChange={e => setForm({...form, data: e.target.value})} className="[color-scheme:dark]" /></Field>
           </div>
-          <Field label="Categoria" required><Sel value={form.categoria_id} onChange={e => setForm({...form, categoria_id: e.target.value})}><option value="">Selecione uma categoria</option>{filteredCats.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</Sel></Field>
-          <Field label="Descrição" required><Inp placeholder="Descreva a transação" value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} /></Field>
+          <Field label="Categoria" required><Sel data-testid="tx-modal-categoria" value={form.categoria_id} onChange={e => setForm({...form, categoria_id: e.target.value})}><option value="">Selecione uma categoria</option>{filteredCats.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</Sel></Field>
+          <Field label="Descrição" required><Inp data-testid="tx-modal-descricao" placeholder="Descreva a transação" value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} /></Field>
           <Field label={tipo === "receita" ? "Método de Recebimento" : "Método de Pagamento"}>
-            <Sel value={form.metodo} onChange={e => setForm({...form, metodo: e.target.value, card_id: e.target.value !== "Crédito" ? "" : form.card_id})}>
+            <Sel data-testid="tx-modal-metodo" value={form.metodo} onChange={e => setForm({...form, metodo: e.target.value, card_id: e.target.value !== "Crédito" ? "" : form.card_id})}>
               <option value="">Selecione (opcional)</option>
               {["Pix","Transferência","Débito","Crédito","Dinheiro","Boleto"].map(m => <option key={m} value={m}>{m}</option>)}
             </Sel>
@@ -98,37 +94,37 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
           
           {/* Opções de Parcelamento - só aparece para despesas com crédito */}
           {tipo === "despesa" && isCredito && (
-            <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4 space-y-4">
+            <div data-testid="tx-modal-installment-section" className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4 space-y-4">
               <p className="text-purple-400 text-xs font-medium flex items-center gap-2">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
                 Opções de Parcelamento
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Parcelas">
-                  <Sel value={form.parcelas} onChange={e => setForm({...form, parcelas: e.target.value})}>
+                  <Sel data-testid="tx-modal-parcelas" value={form.parcelas} onChange={e => setForm({...form, parcelas: e.target.value})}>
                     {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
                       <option key={n} value={n}>{n}x {form.valor ? `de R$ ${(Number(form.valor) / n).toFixed(2)}` : ""}</option>
                     ))}
                   </Sel>
                 </Field>
                 <Field label="Cartão" required>
-                  <Sel value={form.card_id} onChange={e => setForm({...form, card_id: e.target.value})}>
+                  <Sel data-testid="tx-modal-card" value={form.card_id} onChange={e => setForm({...form, card_id: e.target.value})}>
                     <option value="">Selecione o cartão</option>
                     {cards && cards.map(c => (
-                      <option key={c.id} value={c.id}>{c.nome} (Disp: R$ {(c.limite - c.usado).toFixed(2)})</option>
+                      <option key={c.id} value={c.id}>{c.nome} (Disp: R$ {(c.limite - (c.usado || 0)).toFixed(2)})</option>
                     ))}
                   </Sel>
                 </Field>
               </div>
               {valorParcela && (
-                <div className="flex items-center justify-between bg-white/[0.04] rounded-lg px-3 py-2">
+                <div data-testid="tx-modal-parcela-info" className="flex items-center justify-between bg-white/[0.04] rounded-lg px-3 py-2">
                   <span className="text-white/50 text-xs">{form.parcelas}x de</span>
                   <span className="text-white font-semibold">R$ {valorParcela}</span>
                 </div>
               )}
               {form.card_id && (
                 <p className="text-amber-400/80 text-xs">
-                  ⚠️ O valor será adicionado como parcelas no cartão selecionado
+                  O valor total será adicionado como {form.parcelas} parcela(s) no cartão selecionado
                 </p>
               )}
             </div>
@@ -144,14 +140,14 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
           
           {form.detalhado && (<div className="bg-white/[0.02] rounded-lg p-3 border border-white/[0.06]"><p className="text-white/40 text-xs mb-3">Itens do detalhamento</p>{form.itens.map((it, i) => (<div key={i} className="flex items-center justify-between py-1.5"><span className="text-white/60 text-xs">{it.nome}</span><div className="flex items-center gap-2"><span className="text-white text-xs font-medium">{fmt(it.valor)}</span><button type="button" onClick={() => removeItem(i)} className="text-red-400/50 hover:text-red-400"><X className="w-3 h-3" /></button></div></div>))}<div className="flex gap-2 mt-2"><Inp placeholder="Item" value={newItem.nome} onChange={e => setNewItem({...newItem, nome: e.target.value})} className="!py-1.5 text-xs" /><Inp type="number" placeholder="Valor" value={newItem.valor} onChange={e => setNewItem({...newItem, valor: e.target.value})} className="!py-1.5 text-xs !w-24" /><button type="button" onClick={addItem} className="text-emerald-400 shrink-0 px-2"><Plus className="w-4 h-4" /></button></div></div>)}
         </div>
-        <DialogFooter className="gap-2"><Btn variant="secondary" onClick={onClose}>Cancelar</Btn><Btn onClick={handleSave}>{item ? "Salvar" : "Criar"}</Btn></DialogFooter>
+        <DialogFooter className="gap-2"><Btn variant="secondary" onClick={onClose}>Cancelar</Btn><Btn data-testid="tx-modal-save" onClick={handleSave}>{item ? "Salvar" : "Criar"}</Btn></DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
 function TxPage({ tipo }) {
-  const { transactions, categories, tags, cards, createTransaction, updateTransaction, deleteTransaction, createInstallment } = useData();
+  const { transactions, categories, tags, cards, createTransaction, updateTransaction, deleteTransaction, createInstallmentBatch } = useData();
   const tx = useMemo(() => transactions.filter(t => t.tipo === tipo), [transactions, tipo]);
   const [modalOpen, setMO] = useState(false);
   const [editItem, setEI] = useState(null);
@@ -184,7 +180,7 @@ function TxPage({ tipo }) {
           {expId === t.id && t.itens?.length > 0 && (<div className="px-8 py-3 bg-white/[0.01] border-b border-white/[0.03]">{t.itens.map((it, i) => (<div key={i} className="flex justify-between py-1"><span className="text-white/40 text-xs">{it.nome}</span><span className="text-white/60 text-xs">{fmt(it.valor)}</span></div>))}</div>)}
         </div>))}
       </div>
-      <TransactionModal open={modalOpen} onClose={() => { setMO(false); setEI(null); }} onSave={save} item={editItem} tipo={tipo} categories={categories} tags={tags} cards={cards} onCreateInstallment={createInstallment} />
+      <TransactionModal open={modalOpen} onClose={() => { setMO(false); setEI(null); }} onSave={save} item={editItem} tipo={tipo} categories={categories} tags={tags} cards={cards} onCreateInstallmentBatch={createInstallmentBatch} />
     </div>
   );
 }
