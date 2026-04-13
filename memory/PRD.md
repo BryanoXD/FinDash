@@ -1,79 +1,88 @@
 # FinDash - Product Requirements Document
 
 ## Original Problem Statement
-Clone do FinPulse (https://parcel-manager-26.preview.emergentagent.com/) - aplicação de gestão financeira pessoal completa em português brasileiro.
+Clone do FinPulse (https://parcel-manager-26.preview.emergentagent.com/) - aplicacao de gestao financeira pessoal completa em portugues brasileiro.
 
 ## User Persona
-- Usuários brasileiros que desejam gerenciar suas finanças pessoais
-- Necessitam de controle de receitas, despesas, investimentos, cartões de crédito e metas financeiras
+- Usuarios brasileiros que desejam gerenciar suas financas pessoais
+- Necessitam de controle de receitas, despesas, investimentos, cartoes de credito e metas financeiras
 
 ## Core Requirements
 
 ### Phase 1 (Completed)
-- ✅ Login page com autenticação via Google OAuth (Emergent Auth)
-- ✅ Dashboard principal com resumo financeiro
-- ✅ Layout responsivo com Sidebar colapsável
+- Login page com autenticacao via Google OAuth (Emergent Auth)
+- Dashboard principal com resumo financeiro
+- Layout responsivo com Sidebar colapsavel
 
 ### Phase 2 (Completed)
-- ✅ Seção de Aportes de Investimentos
-- ✅ Faturas de cartão de crédito com parcelas
-- ✅ Vinculação de cartões a contas bancárias
-- ✅ Gráficos com filtros de período (7d, 1m, 3m, 6m, 1y, 5y, 10y, 25y)
-- ✅ Gráfico dedicado para investimentos
+- Secao de Aportes de Investimentos
+- Faturas de cartao de credito com parcelas
+- Vinculacao de cartoes a contas bancarias
+- Graficos com filtros de periodo (7d, 1m, 3m, 6m, 1y, 5y, 10y, 25y)
+- Grafico dedicado para investimentos
 
 ### Phase 3 (Completed)
-- ✅ CRUD completo via modais para todas as seções
-- ✅ Categorias customizáveis (criar/editar/excluir)
-- ✅ Sistema de Tags para transações
-- ✅ Detalhamento de transações (itemização)
-- ✅ Status de recorrente e pago para transações
-- ✅ Simulador de Investimentos
-- ✅ Orçamentos por categoria com barras de progresso
-- ✅ Vinculação de investimentos e financiamentos a contas bancárias
+- CRUD completo via modais para todas as secoes
+- Categorias customizaveis (criar/editar/excluir)
+- Sistema de Tags para transacoes
+- Detalhamento de transacoes (itemizacao)
+- Status de recorrente e pago para transacoes
+- Simulador de Investimentos
+- Orcamentos por categoria com barras de progresso
+- Vinculacao de investimentos e financiamentos a contas bancarias
 
 ### Phase 4 (Completed - 15/02/2026)
-- ✅ **Backend FastAPI completo** com MongoDB
-- ✅ **Autenticação real** com Google OAuth (Emergent Auth)
-- ✅ **Integração frontend-backend** (substituição de mockData)
-- ✅ **Regras de negócio** implementadas:
-  - Fatura do cartão = soma das parcelas não pagas
+- Backend FastAPI completo com MongoDB
+- Autenticacao real com Google OAuth (Emergent Auth)
+- Integracao frontend-backend (substituicao de mockData)
+- Regras de negocio implementadas:
+  - Fatura do cartao = soma das parcelas nao pagas
   - Pagamento de parcelas recalcula fatura e limite usado
-  - Orçamentos calculados a partir das despesas pagas
+  - Orcamentos calculados a partir das despesas pagas
   - Aportes em metas incrementam valor_atual
   - Aportes em investimentos atualizam valor total
+
+### Phase 5 (Completed - 13/04/2026)
+- Parcelas de cartao de credito via transacao (batch endpoint)
+  - TransactionModal exibe opcoes de parcelamento ao selecionar "Credito"
+  - Backend cria N parcelas com datas mensais e recalcula totais do cartao
+  - POST /api/cards/installments/batch endpoint
+- Modal unificado "+ Nova Transacao" no Dashboard com seletor Receita/Despesa
+- Logout funcional na sidebar (chama backend, limpa cookie, redireciona)
+- InvestmentsSection refatorada para usar DataContext (dados reais, sem mock)
 
 ## Architecture
 
 ### Frontend
 - React 18 com React Router
-- TailwindCSS para estilização
+- TailwindCSS para estilizacao
 - Shadcn/UI para componentes
-- Recharts para gráficos
-- Lucide-react para ícones
+- Recharts para graficos
+- Lucide-react para icones
 - DataContext para gerenciamento de estado global
 
 ### Backend
 - FastAPI com rotas RESTful
 - MongoDB (Motor async driver)
-- Autenticação via Emergent Google OAuth
+- Autenticacao via Emergent Google OAuth
 - Sessions com cookies httpOnly
 
 ## API Endpoints
 
 ### Auth
-- `POST /api/auth/session` - Criar sessão a partir do Emergent Auth
-- `GET /api/auth/me` - Obter usuário atual
-- `POST /api/auth/logout` - Logout
+- `POST /api/auth/session` - Criar sessao a partir do Emergent Auth
+- `GET /api/auth/me` - Obter usuario atual
+- `POST /api/auth/logout` - Logout (limpa cookie e sessao)
 
 ### Resources (CRUD completo para cada)
 - `/api/categories`
 - `/api/tags`
-- `/api/transactions`
+- `/api/transactions` + `/api/transactions/summary` + `/api/transactions/{id}/toggle-paid`
 - `/api/accounts`
-- `/api/cards` + `/api/cards/{id}/pay-invoice` + `/api/cards/installments`
-- `/api/investments` + `/api/investments/contributions`
-- `/api/financings`
-- `/api/budgets`
+- `/api/cards` + `/api/cards/{id}/pay-invoice` + `/api/cards/installments` + `/api/cards/installments/batch`
+- `/api/investments` + `/api/investments/contributions` + `/api/investments/total`
+- `/api/financings` + `/api/financings/{id}/pay-installment`
+- `/api/budgets` + `/api/budgets/summary`
 - `/api/goals` + `/api/goals/{id}/contribute`
 
 ## File Structure
@@ -82,7 +91,7 @@ Clone do FinPulse (https://parcel-manager-26.preview.emergentagent.com/) - aplic
 ├── backend/
 │   ├── server.py (main FastAPI app)
 │   ├── models.py (Pydantic schemas)
-│   ├── seed.py (dados iniciais para novos usuários)
+│   ├── seed.py (dados iniciais para novos usuarios)
 │   └── routes/ (rotas modulares)
 │       ├── auth.py
 │       ├── categories.py, tags.py, transactions.py
@@ -92,26 +101,27 @@ Clone do FinPulse (https://parcel-manager-26.preview.emergentagent.com/) - aplic
     └── src/
         ├── services/api.js (API client)
         ├── context/DataContext.jsx (estado global)
-        ├── components/AuthCallback.jsx (OAuth callback)
-        └── pages/sections/ (seções do dashboard)
+        ├── components/AuthCallback.jsx, Sidebar.jsx
+        └── pages/sections/ (secoes do dashboard)
 ```
 
 ## Testing Status
-- ✅ Backend: 23 APIs testadas (100%)
-- ✅ Frontend: Integração completa com DataContext
+- Backend: 35 APIs testadas (100%) - iteration_4
+- Frontend: Integracao completa com DataContext, todos os modais testados
+- All P0 and P1 items verified
 
-## P0 - Critical (Next Steps)
-Nenhum - MVP completo
+## P0 - Critical
+Nenhum - Todos os itens criticos concluidos
 
-## P1 - High Priority
-1. Implementar logout na sidebar (botão "Sair")
-2. Atualizar InvestmentsSection e CardsAccountsSection para usar DataContext
-3. Heatmap baseado em dados reais de transações
+## P1 - High Priority (Completed)
+- ~~Implementar logout na sidebar~~ DONE
+- ~~Refatorar InvestmentsSection para usar DataContext~~ DONE
+- ~~Parcelas de cartao de credito no TransactionModal~~ DONE
 
 ## P2 - Medium Priority
-1. Implementar importação real de extratos (CSV, OFX)
-2. Exportação de relatórios em PDF
-3. Notificações por email
+1. Implementar importacao real de extratos (CSV, OFX)
+2. Exportacao de relatorios em PDF
+3. Heatmap baseado em dados reais de transacoes
 
 ## P3 - Low Priority
 1. Multi-idioma
@@ -120,5 +130,5 @@ Nenhum - MVP completo
 
 ## Constraints
 - Manter layout, cores e estilo visual existentes
-- Todas as operações CRUD devem usar modais
-- Aplicação em português brasileiro
+- Todas as operacoes CRUD devem usar modais
+- Aplicacao em portugues brasileiro
