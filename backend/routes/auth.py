@@ -6,13 +6,14 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from datetime import datetime, timezone, timedelta
 import httpx
 import uuid
+import os
 from models import User, UserSession
 from seed import seed_user_data
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# Emergent Auth endpoint
-EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+# Emergent Auth endpoint from env
+EMERGENT_AUTH_URL = os.environ.get('EMERGENT_AUTH_URL', 'https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data')
 
 
 def get_session_token_from_request(request: Request) -> str | None:

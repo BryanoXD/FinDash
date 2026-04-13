@@ -23,19 +23,19 @@ const TIME_PERIODS = ["7d", "1m", "3m", "6m", "1y", "5y", "10y", "25y"];
 function SummaryCard({ title, value, variacao, icon: Icon, iconColor, showBalance }) {
   const isPositive = variacao >= 0;
   return (
-    <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] transition-all duration-300">
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-white/50 text-sm font-medium">{title}</span>
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${iconColor}`}>
+    <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-4 sm:p-5 hover:border-white/[0.12] transition-all duration-300">
+      <div className="flex items-center justify-between mb-3 sm:mb-4">
+        <span className="text-white/50 text-xs sm:text-sm font-medium">{title}</span>
+        <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center ${iconColor}`}>
           <Icon className="w-4 h-4" />
         </div>
       </div>
-      <div className="text-white text-2xl font-bold mb-1.5">
-        {showBalance ? formatCurrency(value) : "R$ ••••••"}
+      <div className="text-white text-lg sm:text-2xl font-bold mb-1.5">
+        {showBalance ? formatCurrency(value) : "R$ ------"}
       </div>
       <div className={`flex items-center gap-1 text-xs font-medium ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
         {isPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-        <span>{isPositive ? "+" : ""}{variacao.toFixed(1)}% este mês</span>
+        <span>{isPositive ? "+" : ""}{variacao.toFixed(1)}% este mes</span>
       </div>
     </div>
   );
@@ -43,9 +43,9 @@ function SummaryCard({ title, value, variacao, icon: Icon, iconColor, showBalanc
 
 function DueCard({ title, subtitle, icon: Icon, iconBg, receitas, despesas, onClick }) {
   return (
-    <div onClick={onClick} className="bg-[#111111] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] transition-all duration-300 cursor-pointer">
-      <div className="flex items-center gap-3 mb-5">
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${iconBg}`}>
+    <div onClick={onClick} className="bg-[#111111] border border-white/[0.06] rounded-xl p-4 sm:p-5 hover:border-white/[0.12] transition-all duration-300 cursor-pointer">
+      <div className="flex items-center gap-3 mb-4 sm:mb-5">
+        <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center ${iconBg}`}>
           <Icon className="w-4 h-4" />
         </div>
         <div>
@@ -53,14 +53,14 @@ function DueCard({ title, subtitle, icon: Icon, iconBg, receitas, despesas, onCl
           <p className="text-white/30 text-xs">{subtitle}</p>
         </div>
       </div>
-      <div className="flex gap-8">
+      <div className="flex gap-6 sm:gap-8">
         <div>
           <p className="text-white/40 text-xs mb-1">Receitas</p>
-          <p className="text-emerald-400 font-semibold text-sm">{formatCurrency(receitas)}</p>
+          <p className="text-emerald-400 font-semibold text-xs sm:text-sm">{formatCurrency(receitas)}</p>
         </div>
         <div>
           <p className="text-white/40 text-xs mb-1">Despesas</p>
-          <p className="text-red-400 font-semibold text-sm">{formatCurrency(despesas)}</p>
+          <p className="text-red-400 font-semibold text-xs sm:text-sm">{formatCurrency(despesas)}</p>
         </div>
       </div>
     </div>
@@ -243,10 +243,10 @@ export default function OverviewSection() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-white text-2xl font-bold">Olá, {userName}!</h1>
-          <p className="text-white/40 text-sm mt-1">Aqui está o resumo das suas finanças</p>
+          <h1 className="text-white text-xl sm:text-2xl font-bold">Ola, {userName}!</h1>
+          <p className="text-white/40 text-sm mt-1">Aqui esta o resumo das suas financas</p>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => setShowBalance(!showBalance)} className="text-white/40 hover:text-white/80 transition-colors p-2 rounded-lg hover:bg-white/[0.04]">
@@ -254,9 +254,9 @@ export default function OverviewSection() {
           </button>
           <button 
             onClick={() => setShowNewTx(true)}
-            className="flex items-center gap-2 bg-white text-black text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-2 bg-white text-black text-sm font-medium px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg hover:bg-gray-100 transition-colors"
           >
-            <Plus className="w-4 h-4" /> Nova Transação
+            <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Nova</span> Transacao
           </button>
         </div>
       </div>
@@ -269,7 +269,7 @@ export default function OverviewSection() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <div onClick={() => setSaldoModal(true)} className="cursor-pointer">
           <SummaryCard title="Saldo Total" value={summary.saldoTotal} variacao={summary.varSaldo} icon={Wallet} iconColor="bg-indigo-500/20 text-indigo-400" showBalance={showBalance} />
         </div>
@@ -279,11 +279,11 @@ export default function OverviewSection() {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6">
         {/* Area Chart */}
-        <div className="lg:col-span-2 bg-[#111111] border border-white/[0.06] rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-white font-semibold">Receitas vs Despesas</h3>
+        <div className="lg:col-span-2 bg-[#111111] border border-white/[0.06] rounded-xl p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+            <h3 className="text-white font-semibold text-sm sm:text-base">Receitas vs Despesas</h3>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-400" />
@@ -295,18 +295,18 @@ export default function OverviewSection() {
               </div>
             </div>
           </div>
-          <div className="flex gap-1 mb-4">
+          <div className="flex flex-wrap gap-1 mb-4">
             {TIME_PERIODS.map((p) => (
               <button
                 key={p}
                 onClick={() => setChartPeriod(p)}
-                className={`px-3 py-1.5 text-xs rounded-md transition-colors ${chartPeriod === p ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs rounded-md transition-colors ${chartPeriod === p ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60"}`}
               >
                 {p}
               </button>
             ))}
           </div>
-          <div className="h-64">
+          <div className="h-48 sm:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
@@ -369,15 +369,15 @@ export default function OverviewSection() {
       </div>
 
       {/* Financial Goals */}
-      <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-5">
+      <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-4 sm:p-5">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-white font-semibold">Metas Financeiras</h3>
+          <h3 className="text-white font-semibold text-sm sm:text-base">Metas Financeiras</h3>
           <button className="text-white/40 hover:text-white/60 text-sm flex items-center gap-1">
             Ver todas <ArrowRight className="w-4 h-4" />
           </button>
         </div>
         {goals.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {goals.slice(0, 3).map((goal) => {
               const progress = goal.valor_meta > 0 ? (goal.valor_atual / goal.valor_meta) * 100 : 0;
               const Icon = iconMap[goal.icone] || Target;

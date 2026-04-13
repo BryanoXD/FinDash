@@ -5,6 +5,9 @@ module.exports = {
     "./src/**/*.{js,jsx,ts,tsx}",
     "./public/index.html"
   ],
+  safelist: [
+    "lg:left-[72px]", "lg:left-[260px]", "lg:ml-[72px]", "lg:ml-[260px]",
+  ],
   theme: {
   	extend: {
   		borderRadius: {

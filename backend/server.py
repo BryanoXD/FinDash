@@ -13,14 +13,18 @@ import httpx
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+# Load env FIRST
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
 # Import routes
 from routes import auth, categories, tags, transactions, accounts, cards, investments, financings, budgets, goals
-from routes.auth import get_current_user_id, EMERGENT_AUTH_URL
+from routes.auth import get_current_user_id
 from models import User, UserSession
 from seed import seed_user_data
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+# Auth service URL from env
+EMERGENT_AUTH_URL = os.environ.get('EMERGENT_AUTH_URL', 'https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data')
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -29,6 +33,17 @@ db = client[os.environ['DB_NAME']]
 
 # Create the main app
 app = FastAPI(title="FinDash API", version="1.0.0")
+
+# CORS - must be added BEFORE routes; restrict to frontend origin in production
+frontend_url = os.environ.get('FRONTEND_URL', '')
+allowed_origins = [frontend_url] if frontend_url else ["*"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 # Configure logging
 logging.basicConfig(
@@ -133,10 +148,10 @@ async def auth_session(request: Request):
     if not session_id:
         raise HTTPException(status_code=400, detail="session_id is required")
     
-    # Get user data from Emergent Auth
-    async with httpx.AsyncClient() as client:
+    # Get user data from Emergent Auth (URL from env)
+    async with httpx.AsyncClient() as http_client:
         try:
-            auth_response = await client.get(
+            auth_response = await http_client.get(
                 EMERGENT_AUTH_URL,
                 headers={"X-Session-ID": session_id}
             )
@@ -554,16 +569,6 @@ async def delete_goal(goal_id: str, request: Request):
 async def contribute_to_goal(goal_id: str, data: goals.GoalContributionCreate, request: Request):
     user_id = await get_current_user_id(request, db)
     return await goals.contribute_to_goal(goal_id, data, request, db=db, user_id=user_id)
-
-
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.on_event("shutdown")
