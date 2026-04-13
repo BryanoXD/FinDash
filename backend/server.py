@@ -24,7 +24,7 @@ from models import User, UserSession
 from seed import seed_user_data
 
 # Auth service URL from env
-EMERGENT_AUTH_URL = os.environ.get('EMERGENT_AUTH_URL', 'https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data')
+EMERGENT_AUTH_URL = os.environ['EMERGENT_AUTH_URL']
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']

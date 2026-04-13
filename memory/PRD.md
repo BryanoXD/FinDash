@@ -3,7 +3,12 @@
 ## Original Problem Statement
 Clone do FinPulse - aplicacao de gestao financeira pessoal completa em portugues brasileiro.
 
-## Core Requirements
+## Architecture
+- Frontend: React 18 + TailwindCSS + Shadcn/UI + Recharts + DataContext
+- Backend: FastAPI + MongoDB (Motor) + Emergent Google OAuth
+- Auth: httpOnly cookies, EMERGENT_AUTH_URL from .env, CORS restricted
+
+## Phases Completed
 
 ### Phase 1-4 (Completed)
 - Login via Google OAuth, Dashboard, Sidebar, CRUD completo via modais
@@ -14,47 +19,30 @@ Clone do FinPulse - aplicacao de gestao financeira pessoal completa em portugues
 - Modal unificado Dashboard, Logout funcional, InvestmentsSection refatorada
 
 ### Phase 6 (Completed - 13/04/2026)
-- Dashboard cards (Vencidos/Vencendo/Futuro) clicaveis com modais detalhados
-- Saldo Total clicavel com composicao (contas, receitas, despesas, investimentos)
-- Metas Financeiras com opcao de Sacar (saque/withdraw)
-- Tela Investimentos com Metas Financeiras + Resgate de investimentos
-- TransactionModal com categoria Financiamento e seletor de qual financiamento pagar
-- Sidebar renomeada: "Invest. e Financ."
-- Backend: POST /api/financings/{id}/pay-custom + goal contribute com valores negativos
+- Dashboard cards clicaveis com modais, Saldo Total com composicao
+- Metas com saque, Investimentos com resgate, Financiamento no TransactionModal
+- Sidebar renomeada "Invest. e Financ."
 
-## Architecture
-- Frontend: React 18 + TailwindCSS + Shadcn/UI + Recharts + DataContext
-- Backend: FastAPI + MongoDB (Motor) + Emergent Google OAuth
+### Phase 7 (Completed - 13/04/2026)
+- **Responsividade completa**: mobile/tablet/desktop
+  - Sidebar drawer no mobile com hamburger menu
+  - Cards 2-col mobile, 4-col desktop
+  - Tabela de transacoes: card layout mobile, grid desktop
+  - Charts responsivos, sem overflow horizontal
+- **Auth segura para deploy**:
+  - EMERGENT_AUTH_URL em .env (sem fallback hardcoded)
+  - CORS restrito ao frontend URL
+  - Cookies httpOnly + secure + samesite
+  - Endpoints protegidos retornam 401 sem auth
 
-## API Endpoints
-### Auth
-- POST /api/auth/session, GET /api/auth/me, POST /api/auth/logout
-
-### Resources
-- /api/categories, /api/tags, /api/transactions (+ /summary, /toggle-paid)
-- /api/accounts
-- /api/cards (+ /pay-invoice, /installments, /installments/batch)
-- /api/investments (+ /contributions, /total)
-- /api/financings (+ /pay-installment, /pay-custom)
-- /api/budgets (+ /summary)
-- /api/goals (+ /contribute)
-
-## P0 - Critical
-Nenhum
-
-## P1 - High Priority
-Nenhum - Todos concluidos
+## P0/P1 - Nenhum pendente
 
 ## P2 - Medium Priority
 1. Importacao real de extratos (CSV, OFX)
 2. Exportacao de relatorios em PDF
-3. Heatmap baseado em dados reais de transacoes
+3. Heatmap baseado em dados reais
 
 ## P3 - Low Priority
 1. Multi-idioma
 2. Tema claro/escuro
 3. PWA para mobile
-
-## Constraints
-- Manter layout e estilo visual existentes
-- CRUD via modais, app em portugues brasileiro
