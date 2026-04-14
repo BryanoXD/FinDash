@@ -12,13 +12,28 @@ const fmt = (v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency:
 const fmtNum = (v) => new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v) || 0);
 const Field = ({ label, required, children }) => (<div><label className="text-white/60 text-xs block mb-1.5">{label}{required && " *"}</label>{children}</div>);
 const Inp = (props) => (<input {...props} className={`w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/20 placeholder:text-white/25 ${props.className || ""}`} />);
-const MoneyInp = ({ value, onChange, ...rest }) => (
-  <div className="relative">
-    <input type="number" step="0.01" placeholder="0,00" value={value} onChange={onChange} {...rest} className={`w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/20 placeholder:text-white/25 pr-2 ${rest.className || ""}`} />
-    {value && Number(value) > 0 && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 text-[10px] pointer-events-none">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 }).format(Number(value))}</span>}
-  </div>
-);
-const Sel = ({ children, ...rest }) => (<select {...rest} className={`w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/20 [color-scheme:dark] [&>option]:bg-[#1a1a1a] [&>option]:text-white ${rest.className || ""}`}>{children}</select>);
+const MoneyInp = ({ value, onValueChange, ...rest }) => {
+  const formatFromNum = (num) => {
+    if (!num && num !== 0) return "";
+    const fixed = Number(num).toFixed(2);
+    const [int, dec] = fixed.split(".");
+    return int.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + dec;
+  };
+  const [display, setDisplay] = React.useState(() => value ? formatFromNum(value) : "");
+  React.useEffect(() => { if (!value && value !== 0) setDisplay(""); }, [value]);
+  const handleChange = (e) => {
+    let raw = e.target.value.replace(/[^\d]/g, "");
+    if (!raw) { setDisplay(""); onValueChange(""); return; }
+    raw = raw.replace(/^0+/, "") || "0";
+    while (raw.length < 3) raw = "0" + raw;
+    const cents = raw.slice(-2);
+    let intPart = raw.slice(0, -2).replace(/^0+/, "") || "0";
+    setDisplay(intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + cents);
+    onValueChange(parseFloat(intPart + "." + cents));
+  };
+  return <input {...rest} type="text" inputMode="numeric" placeholder="0,00" value={display} onChange={handleChange} className={`w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/20 placeholder:text-white/25 ${rest.className || ""}`} />;
+};
+const Sel = ({ children, ...rest }) => (<select {...rest} className={`w-full bg-[#1a1a1a] border border-white/[0.1] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/20 ${rest.className || ""}`} style={{ colorScheme: 'dark' }}>{children}</select>);
 const Btn = ({ children, variant = "primary", ...rest }) => (<button {...rest} className={`text-sm font-medium px-4 py-2.5 rounded-lg transition-colors ${variant === "primary" ? "bg-white text-black hover:bg-gray-100" : "text-white/40 border border-white/[0.08] hover:bg-white/[0.04]"}`}>{children}</button>);
 
 function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags, cards, onCreateInstallmentBatch, financings, onPayFinancingCustom }) {
@@ -105,7 +120,7 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
         <div className="space-y-4 py-2">
           {/* Valor + Data */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Valor Total" required><MoneyInp data-testid="tx-modal-valor" value={form.valor} onChange={e => setForm({...form, valor: e.target.value})} /></Field>
+            <Field label="Valor Total" required><MoneyInp data-testid="tx-modal-valor" value={form.valor} onValueChange={v => setForm({...form, valor: v})} /></Field>
             {isDespesa ? (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
