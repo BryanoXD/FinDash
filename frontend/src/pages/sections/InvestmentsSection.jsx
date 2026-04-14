@@ -319,12 +319,12 @@ export default function InvestmentsSection() {
 
       {/* Investment Modal */}
       <Dialog open={modalOpen} onOpenChange={() => { setMO(false); setEI(null); }}>
-        <DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-md">
+        <DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-[calc(100vw-2rem)] sm:max-w-md">
           <DialogHeader><DialogTitle className="text-white">{editInv ? "Editar" : "Novo"} Investimento</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <Field label="Nome" required><Inp data-testid="inv-modal-nome" placeholder="Ex: Tesouro Selic" value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} /></Field>
             <Field label="Tipo" required><Sel data-testid="inv-modal-tipo" value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})}><option value="">Selecione</option>{["Renda Fixa","Acoes","FIIs","Crypto","ETF","CDB","LCI/LCA"].map(t => <option key={t} value={t}>{t}</option>)}</Sel></Field>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Valor (R$)"><Inp data-testid="inv-modal-valor" type="number" placeholder="1000" value={form.valor} onChange={e => setForm({...form, valor: e.target.value})} /></Field>
               <Field label="Rendimento (% a.a.)"><Inp type="number" step="0.01" placeholder="12.5" value={form.rendimento} onChange={e => setForm({...form, rendimento: e.target.value})} /></Field>
             </div>
@@ -336,16 +336,16 @@ export default function InvestmentsSection() {
 
       {/* Financing Modal */}
       <Dialog open={finModal} onOpenChange={() => { setFM(false); setEF(null); }}>
-        <DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-md">
+        <DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-[calc(100vw-2rem)] sm:max-w-md">
           <DialogHeader><DialogTitle className="text-white">{editFin ? "Editar" : "Novo"} Financiamento</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <Field label="Nome" required><Inp data-testid="fin-modal-nome" placeholder="Ex: Financiamento Apartamento" value={finForm.nome} onChange={e => setFF({...finForm, nome: e.target.value})} /></Field>
             <Field label="Banco"><Sel value={finForm.banco_id} onChange={e => setFF({...finForm, banco_id: e.target.value})}><option value="">Selecione (opcional)</option>{accounts.map(b => <option key={b.id} value={b.id}>{b.nome}</option>)}</Sel></Field>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Valor Total"><Inp type="number" placeholder="320000" value={finForm.valor_total} onChange={e => setFF({...finForm, valor_total: e.target.value})} /></Field>
               <Field label="Parcelas"><Inp type="number" placeholder="360" value={finForm.parcelas} onChange={e => setFF({...finForm, parcelas: e.target.value})} /></Field>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Valor Parcela"><Inp type="number" placeholder="1850" value={finForm.valor_parcela} onChange={e => setFF({...finForm, valor_parcela: e.target.value})} /></Field>
               <Field label="Taxa (% a.a.)"><Inp type="number" step="0.1" placeholder="8.5" value={finForm.taxa} onChange={e => setFF({...finForm, taxa: e.target.value})} /></Field>
             </div>
@@ -409,7 +409,7 @@ export default function InvestmentsSection() {
 
       {/* Goal Modal */}
       <Dialog open={goalModal} onOpenChange={() => { setGoalModal(false); setEditGoal(null); }}>
-        <DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-md">
+        <DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-[calc(100vw-2rem)] sm:max-w-md">
           <DialogHeader><DialogTitle className="text-white">{editGoal ? "Editar" : "Nova"} Meta</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <Field label="Nome" required><Inp data-testid="goal-modal-nome" placeholder="Ex: Viagem" value={goalForm.nome} onChange={e => setGoalForm({...goalForm, nome: e.target.value})} /></Field>
