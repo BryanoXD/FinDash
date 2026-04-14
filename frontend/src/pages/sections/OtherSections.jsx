@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useData } from "../../context/DataContext";
 import {
   Plus, Pencil, Trash2, X, Search, Download, Calendar, PieChart,
-  BarChart3, Target, ChevronDown, RotateCcw, Check, Info,
+  BarChart3, Target, ChevronDown, RotateCcw, Check, Info, CheckCircle,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -15,24 +15,31 @@ const Sel = ({ children, ...rest }) => (<select {...rest} className={`w-full bg-
 const Btn = ({ children, variant = "primary", ...rest }) => (<button {...rest} className={`text-sm font-medium px-4 py-2.5 rounded-lg transition-colors ${variant === "primary" ? "bg-white text-black hover:bg-gray-100" : "text-white/40 border border-white/[0.08] hover:bg-white/[0.04]"}`}>{children}</button>);
 
 function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags, cards, onCreateInstallmentBatch, financings, onPayFinancingCustom }) {
+  const today = new Date().toISOString().split("T")[0];
   const [form, setForm] = useState({ 
-    valor: "", data: new Date().toISOString().split("T")[0], categoria_id: "", descricao: "", 
-    metodo: "", tags: [], recorrente: false, pago: true, detalhado: false, itens: [],
+    valor: "", data: today, data_vencimento: "", sem_vencimento: false, categoria_id: "", descricao: "", 
+    metodo: "", tags: [], recorrente: false, pago: tipo === "receita", detalhado: false, itens: [],
     parcelas: 1, card_id: "", financing_id: ""
   });
   const [newItem, setNewItem] = useState({ nome: "", valor: "" });
   
   React.useEffect(() => { 
     if (item) {
-      setForm({ ...item, categoria_id: item.categoria_id || "", parcelas: 1, card_id: "", financing_id: "" }); 
+      setForm({ 
+        ...item, 
+        categoria_id: item.categoria_id || "", 
+        parcelas: 1, card_id: "", financing_id: "",
+        sem_vencimento: !item.data_vencimento,
+        data_vencimento: item.data_vencimento || "",
+      }); 
     } else {
       setForm({ 
-        valor: "", data: new Date().toISOString().split("T")[0], categoria_id: "", descricao: "", 
-        metodo: "", tags: [], recorrente: false, pago: true, detalhado: false, itens: [],
+        valor: "", data: today, data_vencimento: "", sem_vencimento: tipo === "receita", categoria_id: "", descricao: "", 
+        metodo: "", tags: [], recorrente: false, pago: tipo === "receita", detalhado: false, itens: [],
         parcelas: 1, card_id: "", financing_id: ""
       }); 
     }
-  }, [item, open]);
+  }, [item, open, tipo, today]);
   
   const toggleTag = (id) => setForm(f => ({ ...f, tags: f.tags.includes(id) ? f.tags.filter(t => t !== id) : [...f.tags, id] }));
   const addItem = () => { if (newItem.nome && newItem.valor) { setForm(f => ({ ...f, itens: [...f.itens, { nome: newItem.nome, valor: Number(newItem.valor) }] })); setNewItem({ nome: "", valor: "" }); } };
@@ -40,55 +47,40 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
   
   const isFinanciamentoCategory = form.categoria_id === "__financing__";
   const hasFinancings = financings && financings.length > 0;
+  const isDespesa = tipo === "despesa";
   
   const handleSave = async () => { 
     if (!form.valor || !form.descricao) return;
-    // For financing category, use selected financing's category or create a generic one
     if (isFinanciamentoCategory && !form.financing_id) return;
     if (!isFinanciamentoCategory && !form.categoria_id) return;
     
     const valorTotal = Number(form.valor);
     const parcelas = Number(form.parcelas) || 1;
     
-    // Se for crédito e tiver cartão selecionado, criar parcelas no cartão via batch
-    if (form.metodo === "Crédito" && form.card_id && tipo === "despesa" && onCreateInstallmentBatch) {
+    if (form.metodo === "Crédito" && form.card_id && isDespesa && onCreateInstallmentBatch) {
       try {
-        await onCreateInstallmentBatch({
-          card_id: form.card_id,
-          descricao: form.descricao,
-          valor_total: valorTotal,
-          total_parcelas: parcelas,
-          data: form.data
-        });
-      } catch (error) {
-        console.error('Error creating installments:', error);
-      }
+        await onCreateInstallmentBatch({ card_id: form.card_id, descricao: form.descricao, valor_total: valorTotal, total_parcelas: parcelas, data: form.data });
+      } catch (error) { console.error('Error creating installments:', error); }
     }
     
-    // Se for categoria Financiamento, pagar parcela customizada
     if (isFinanciamentoCategory && form.financing_id && onPayFinancingCustom) {
-      try {
-        await onPayFinancingCustom(form.financing_id, valorTotal);
-      } catch (error) {
-        console.error('Error paying financing:', error);
-      }
+      try { await onPayFinancingCustom(form.financing_id, valorTotal); } catch (error) { console.error('Error paying financing:', error); }
     }
     
-    // Encontrar uma categoria real para salvar a transação
     let catId = form.categoria_id;
     if (isFinanciamentoCategory) {
-      // Usar a primeira categoria de despesa ou criar um fallback
       const fallbackCat = categories.find(c => c.tipo === "despesa" || c.tipo === "ambos");
       catId = fallbackCat?.id || "";
     }
     
-    // Salvar a transação
     if (catId) {
       onSave({ 
         ...form, 
         categoria_id: catId,
         valor: valorTotal, 
         tipo,
+        data: form.sem_vencimento ? today : (isDespesa ? (form.data_vencimento || today) : form.data),
+        data_vencimento: isDespesa && !form.sem_vencimento ? (form.data_vencimento || null) : null,
         pago: form.metodo === "Crédito" ? false : form.pago
       });
     }
@@ -104,19 +96,36 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
       <DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle className="text-white text-lg">{item ? "Editar" : tipo === "receita" ? "Nova Receita" : "Nova Despesa"}</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-4">
+          {/* Valor + Data */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Valor Total" required><Inp data-testid="tx-modal-valor" type="number" step="0.01" placeholder="0,00" value={form.valor} onChange={e => setForm({...form, valor: e.target.value})} /></Field>
-            <Field label="Data" required><Inp data-testid="tx-modal-data" type="date" value={form.data} onChange={e => setForm({...form, data: e.target.value})} className="[color-scheme:dark]" /></Field>
+            {isDespesa ? (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-white/60 text-xs">Data de Vencimento</label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <button type="button" onClick={() => setForm(f => ({...f, sem_vencimento: !f.sem_vencimento, data_vencimento: ""}))} className={`w-7 h-4 rounded-full transition-colors relative ${form.sem_vencimento ? "bg-white/30" : "bg-white/10"}`}><div className={`w-2.5 h-2.5 bg-white rounded-full absolute top-[3px] transition-transform ${form.sem_vencimento ? "translate-x-[14px]" : "translate-x-[3px]"}`} /></button>
+                    <span className="text-white/40 text-[10px]">Sem vencimento</span>
+                  </label>
+                </div>
+                {form.sem_vencimento ? (
+                  <div className="bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-white/40 text-sm">Sem vencimento (registro: {new Date(today).toLocaleDateString("pt-BR")})</div>
+                ) : (
+                  <Inp data-testid="tx-modal-vencimento" type="date" value={form.data_vencimento} onChange={e => setForm({...form, data_vencimento: e.target.value})} className="[color-scheme:dark]" />
+                )}
+              </div>
+            ) : (
+              <Field label="Data" required><Inp data-testid="tx-modal-data" type="date" value={form.data} onChange={e => setForm({...form, data: e.target.value})} className="[color-scheme:dark]" /></Field>
+            )}
           </div>
           <Field label="Categoria" required>
             <Sel data-testid="tx-modal-categoria" value={form.categoria_id} onChange={e => setForm({...form, categoria_id: e.target.value, financing_id: e.target.value !== "__financing__" ? "" : form.financing_id})}>
               <option value="">Selecione uma categoria</option>
               {filteredCats.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-              {tipo === "despesa" && hasFinancings && <option value="__financing__">Financiamento</option>}
+              {isDespesa && hasFinancings && <option value="__financing__">Financiamento</option>}
             </Sel>
           </Field>
-          {/* Financing selector */}
-          {tipo === "despesa" && isFinanciamentoCategory && (
+          {isDespesa && isFinanciamentoCategory && (
             <Field label="Qual financiamento?" required>
               <Sel data-testid="tx-modal-financing" value={form.financing_id} onChange={e => setForm({...form, financing_id: e.target.value})}>
                 <option value="">Selecione o financiamento</option>
@@ -126,22 +135,21 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
               </Sel>
             </Field>
           )}
-          <Field label="Descrição" required><Inp data-testid="tx-modal-descricao" placeholder="Descreva a transação" value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} /></Field>
-          <Field label={tipo === "receita" ? "Método de Recebimento" : "Método de Pagamento"}>
+          <Field label="Descricao" required><Inp data-testid="tx-modal-descricao" placeholder="Descreva a transacao" value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} /></Field>
+          <Field label={tipo === "receita" ? "Metodo de Recebimento" : "Metodo de Pagamento"}>
             <Sel data-testid="tx-modal-metodo" value={form.metodo} onChange={e => setForm({...form, metodo: e.target.value, card_id: e.target.value !== "Crédito" ? "" : form.card_id})}>
               <option value="">Selecione (opcional)</option>
-              {["Pix","Transferência","Débito","Crédito","Dinheiro","Boleto"].map(m => <option key={m} value={m}>{m}</option>)}
+              {["Pix","Transferencia","Debito","Credito","Dinheiro","Boleto"].map(m => <option key={m} value={m}>{m}</option>)}
             </Sel>
           </Field>
           
-          {/* Opções de Parcelamento - só aparece para despesas com crédito */}
-          {tipo === "despesa" && isCredito && (
+          {isDespesa && isCredito && (
             <div data-testid="tx-modal-installment-section" className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4 space-y-4">
               <p className="text-purple-400 text-xs font-medium flex items-center gap-2">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-                Opções de Parcelamento
+                Opcoes de Parcelamento
               </p>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Parcelas">
                   <Sel data-testid="tx-modal-parcelas" value={form.parcelas} onChange={e => setForm({...form, parcelas: e.target.value})}>
                     {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
@@ -149,9 +157,9 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
                     ))}
                   </Sel>
                 </Field>
-                <Field label="Cartão" required>
+                <Field label="Cartao" required>
                   <Sel data-testid="tx-modal-card" value={form.card_id} onChange={e => setForm({...form, card_id: e.target.value})}>
-                    <option value="">Selecione o cartão</option>
+                    <option value="">Selecione o cartao</option>
                     {cards && cards.map(c => (
                       <option key={c.id} value={c.id}>{c.nome} (Disp: R$ {(c.limite - (c.usado || 0)).toFixed(2)})</option>
                     ))}
@@ -164,18 +172,13 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
                   <span className="text-white font-semibold">R$ {valorParcela}</span>
                 </div>
               )}
-              {form.card_id && (
-                <p className="text-amber-400/80 text-xs">
-                  O valor total será adicionado como {form.parcelas} parcela(s) no cartão selecionado
-                </p>
-              )}
             </div>
           )}
           
           <Field label="Tags"><div className="flex flex-wrap gap-2">{tags.map(t => (<button key={t.id} type="button" onClick={() => toggleTag(t.id)} className={`text-xs px-2.5 py-1.5 rounded-md border transition-colors ${form.tags.includes(t.id) ? "border-white/30 text-white" : "border-white/[0.08] text-white/40"}`} style={form.tags.includes(t.id) ? { backgroundColor: t.cor + "20", borderColor: t.cor + "60" } : {}}>{t.nome}</button>))}</div></Field>
           
-          <div className="flex items-center gap-6">
-            {[{k:"recorrente",l:"Recorrente"},{k:"pago",l:"Já pago"},{k:"detalhado",l:"Detalhar itens"}].filter(tog => !(isCredito && tog.k === "pago")).map(tog => (
+          <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
+            {[{k:"recorrente",l:"Recorrente"},{k:"pago",l:"Ja pago"},{k:"detalhado",l:"Detalhar itens"}].filter(tog => !(isCredito && tog.k === "pago")).map(tog => (
               <label key={tog.k} className="flex items-center gap-2 cursor-pointer"><button type="button" onClick={() => setForm(f => ({...f, [tog.k]: !f[tog.k]}))} className={`w-9 h-5 rounded-full transition-colors relative ${form[tog.k] ? "bg-emerald-500" : "bg-white/10"}`}><div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-[3px] transition-transform ${form[tog.k] ? "translate-x-[18px]" : "translate-x-[3px]"}`} /></button><span className="text-white/50 text-xs">{tog.l}</span></label>
             ))}
           </div>
@@ -196,54 +199,170 @@ function TxPage({ tipo }) {
   const [search, setSearch] = useState("");
   const [catF, setCatF] = useState("");
   const [expId, setExpId] = useState(null);
-  const color = tipo === "receita" ? "emerald" : "red";
-  const filtered = useMemo(() => tx.filter(t => { if (search && !t.descricao.toLowerCase().includes(search.toLowerCase())) return false; if (catF && t.categoria !== catF) return false; return true; }), [tx, search, catF]);
+  const [tab, setTab] = useState("pendentes"); // pendentes | finalizadas (only for despesas)
+  const [finalizarModal, setFinalizarModal] = useState(null); // transaction to finalize
+  const [finalizarQtd, setFinalizarQtd] = useState(1);
+  
+  const isDespesa = tipo === "despesa";
+  
+  const filtered = useMemo(() => {
+    let list = tx.filter(t => { if (search && !t.descricao.toLowerCase().includes(search.toLowerCase())) return false; if (catF && t.categoria !== catF) return false; return true; });
+    if (isDespesa) {
+      list = tab === "pendentes" ? list.filter(t => !t.pago) : list.filter(t => t.pago);
+    }
+    return list;
+  }, [tx, search, catF, isDespesa, tab]);
+  
   const total = filtered.reduce((a, b) => a + b.valor, 0);
+  const pendCount = useMemo(() => isDespesa ? tx.filter(t => !t.pago).length : 0, [tx, isDespesa]);
+  const finCount = useMemo(() => isDespesa ? tx.filter(t => t.pago).length : 0, [tx, isDespesa]);
+  
   const save = async (item) => { try { if (item.id) await updateTransaction(item.id, item); else await createTransaction(item); setEI(null); } catch (e) { console.error(e); } };
   const handleDelete = async (id) => { try { await deleteTransaction(id); } catch (e) { console.error(e); } };
+  
+  // Finalizar recorrente: cria N copias como "pago" e marca a original como paga
+  const handleFinalizar = async () => {
+    if (!finalizarModal) return;
+    const t = finalizarModal;
+    const qtd = Number(finalizarQtd) || 1;
+    try {
+      // Criar transacoes adicionais (copias pagas) para cada parcela extra
+      for (let i = 0; i < qtd - 1; i++) {
+        const nextDate = new Date(t.data_vencimento || t.data);
+        nextDate.setMonth(nextDate.getMonth() + i + 1);
+        await createTransaction({
+          descricao: t.descricao,
+          categoria_id: t.categoria_id,
+          valor: t.valor,
+          tipo: t.tipo,
+          data: nextDate.toISOString().split("T")[0],
+          data_vencimento: nextDate.toISOString().split("T")[0],
+          metodo: t.metodo,
+          tags: t.tags || [],
+          recorrente: false,
+          pago: true,
+        });
+      }
+      // Marcar a original como paga e nao recorrente
+      await updateTransaction(t.id, { pago: true, recorrente: false });
+      setFinalizarModal(null);
+      setFinalizarQtd(1);
+    } catch (e) { console.error(e); }
+  };
+  
+  const renderRow = (t) => (
+    <div key={t.id}>
+      {/* Desktop row */}
+      <div className="hidden md:grid grid-cols-[100px_1fr_140px_130px_100px] gap-2 px-5 py-3.5 items-center hover:bg-white/[0.02] transition-colors border-b border-white/[0.03]">
+        <span className="text-white/40 text-xs">
+          {t.data_vencimento ? new Date(t.data_vencimento).toLocaleDateString("pt-BR") : new Date(t.data).toLocaleDateString("pt-BR")}
+        </span>
+        <div>
+          <p className="text-white text-sm font-medium">{t.descricao}</p>
+          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+            {t.metodo && <span className="text-white/25 text-xs">{t.metodo}</span>}
+            {t.recorrente && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 flex items-center gap-1"><RotateCcw className="w-2.5 h-2.5" /> Recorrente</span>}
+            {t.pago ? <Check className="w-3 h-3 text-emerald-400/50" /> : <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">Pendente</span>}
+            {!t.data_vencimento && <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-white/30">Sem vencimento</span>}
+            {t.tags?.map(tid => { const tg = tags.find(x => x.id === tid); return tg ? <span key={tid} className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: tg.cor + "20", color: tg.cor }}>{tg.nome}</span> : null; })}
+          </div>
+        </div>
+        <span className="text-xs px-2 py-1 rounded-md border inline-block w-fit" style={{ borderColor: (categories.find(c => c.nome === t.categoria)?.cor || "#fff") + "40", color: categories.find(c => c.nome === t.categoria)?.cor || "#fff" }}>{t.categoria}</span>
+        <span className={`text-sm font-semibold ${tipo === "receita" ? "text-emerald-400" : "text-red-400"}`}>{tipo === "receita" ? "+" : "-"}{fmt(t.valor)}</span>
+        <div className="flex gap-2">
+          {isDespesa && t.recorrente && !t.pago && <button onClick={() => { setFinalizarModal(t); setFinalizarQtd(1); }} className="text-emerald-400/60 hover:text-emerald-400" title="Finalizar"><CheckCircle className="w-3.5 h-3.5" /></button>}
+          {isDespesa && !t.pago && !t.recorrente && <button onClick={async () => { await updateTransaction(t.id, { pago: true }); }} className="text-emerald-400/40 hover:text-emerald-400" title="Marcar como pago"><Check className="w-3.5 h-3.5" /></button>}
+          <button onClick={() => { setEI(t); setMO(true); }} className="text-white/30 hover:text-white/60"><Pencil className="w-3.5 h-3.5" /></button>
+          <button onClick={() => handleDelete(t.id)} className="text-red-400/40 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
+        </div>
+      </div>
+      {/* Mobile card */}
+      <div className="md:hidden px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.02]">
+        <div className="flex items-start justify-between mb-1.5">
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-sm font-medium truncate">{t.descricao}</p>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <span className="text-white/30 text-xs">{t.data_vencimento ? new Date(t.data_vencimento).toLocaleDateString("pt-BR") : new Date(t.data).toLocaleDateString("pt-BR")}</span>
+              <span className="text-xs px-1.5 py-0.5 rounded-md border" style={{ borderColor: (categories.find(c => c.nome === t.categoria)?.cor || "#fff") + "40", color: categories.find(c => c.nome === t.categoria)?.cor || "#fff" }}>{t.categoria}</span>
+              {t.recorrente && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400"><RotateCcw className="w-2.5 h-2.5 inline" /> Rec.</span>}
+              {!t.pago && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">Pendente</span>}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 ml-2">
+            <span className={`text-sm font-semibold whitespace-nowrap ${tipo === "receita" ? "text-emerald-400" : "text-red-400"}`}>{tipo === "receita" ? "+" : "-"}{fmt(t.valor)}</span>
+            <div className="flex gap-1">
+              {isDespesa && t.recorrente && !t.pago && <button onClick={() => { setFinalizarModal(t); setFinalizarQtd(1); }} className="text-emerald-400/60 hover:text-emerald-400 p-1"><CheckCircle className="w-3.5 h-3.5" /></button>}
+              {isDespesa && !t.pago && !t.recorrente && <button onClick={async () => { await updateTransaction(t.id, { pago: true }); }} className="text-emerald-400/40 hover:text-emerald-400 p-1"><Check className="w-3.5 h-3.5" /></button>}
+              <button onClick={() => { setEI(t); setMO(true); }} className="text-white/30 hover:text-white/60 p-1"><Pencil className="w-3.5 h-3.5" /></button>
+              <button onClick={() => handleDelete(t.id)} className="text-red-400/40 hover:text-red-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {expId === t.id && t.itens?.length > 0 && (<div className="px-4 md:px-8 py-3 bg-white/[0.01] border-b border-white/[0.03]">{t.itens.map((it, i) => (<div key={i} className="flex justify-between py-1"><span className="text-white/40 text-xs">{it.nome}</span><span className="text-white/60 text-xs">{fmt(it.valor)}</span></div>))}</div>)}
+    </div>
+  );
+  
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div><h1 className="text-white text-xl sm:text-2xl font-bold">{tipo === "receita" ? "Receitas" : "Despesas"}</h1><p className="text-white/40 text-sm mt-1">Gerencie suas {tipo === "receita" ? "receitas" : "despesas"}</p></div>
         <Btn onClick={() => { setEI(null); setMO(true); }}><Plus className="w-4 h-4 inline mr-1" />{tipo === "receita" ? "Nova Receita" : "Nova Despesa"}</Btn>
       </div>
+      
+      {/* Tabs for despesas: Pendentes / Finalizadas */}
+      {isDespesa && (
+        <div className="flex gap-1 bg-white/[0.03] rounded-lg p-1 w-fit mb-4" data-testid="despesas-tabs">
+          <button onClick={() => setTab("pendentes")} className={`px-4 py-2 text-sm rounded-md transition-colors ${tab === "pendentes" ? "bg-amber-500/20 text-amber-400 font-medium" : "text-white/40 hover:text-white/60"}`}>
+            Pendentes {pendCount > 0 && <span className="ml-1 text-xs bg-amber-500/20 px-1.5 py-0.5 rounded">{pendCount}</span>}
+          </button>
+          <button onClick={() => setTab("finalizadas")} className={`px-4 py-2 text-sm rounded-md transition-colors ${tab === "finalizadas" ? "bg-emerald-500/20 text-emerald-400 font-medium" : "text-white/40 hover:text-white/60"}`}>
+            Finalizadas {finCount > 0 && <span className="ml-1 text-xs bg-emerald-500/20 px-1.5 py-0.5 rounded">{finCount}</span>}
+          </button>
+        </div>
+      )}
+      
       <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-4 mb-4"><div className="flex flex-wrap gap-3"><div className="relative flex-1 min-w-[200px]"><Search className="w-4 h-4 text-white/30 absolute left-3 top-1/2 -translate-y-1/2" /><Inp placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="!pl-10" /></div><Sel value={catF} onChange={e => setCatF(e.target.value)} className="!w-auto min-w-[180px]"><option value="">Todas categorias</option>{categories.filter(c => c.tipo === tipo || c.tipo === "ambos").map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}</Sel></div></div>
-      <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-4 mb-4 flex justify-between items-center"><span className="text-white/50 text-sm">{filtered.length} transações</span><span className={`font-semibold ${tipo === "receita" ? "text-emerald-400" : "text-red-400"}`}>Total: {fmt(total)}</span></div>
+      <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-4 mb-4 flex justify-between items-center"><span className="text-white/50 text-sm">{filtered.length} {isDespesa ? (tab === "pendentes" ? "pendentes" : "finalizadas") : "transacoes"}</span><span className={`font-semibold ${tipo === "receita" ? "text-emerald-400" : "text-red-400"}`}>Total: {fmt(total)}</span></div>
       <div className="bg-[#111111] border border-white/[0.06] rounded-xl overflow-hidden">
-        {/* Desktop table header - hidden on mobile */}
-        <div className="hidden md:grid grid-cols-[100px_1fr_140px_130px_80px] gap-2 px-5 py-3 border-b border-white/[0.04] text-white/30 text-xs font-medium"><span>Data</span><span>Descricao</span><span>Categoria</span><span>Valor</span><span>Acoes</span></div>
-        {filtered.map(t => (<div key={t.id}>
-          {/* Desktop row */}
-          <div className="hidden md:grid grid-cols-[100px_1fr_140px_130px_80px] gap-2 px-5 py-3.5 items-center hover:bg-white/[0.02] transition-colors border-b border-white/[0.03]">
-            <span className="text-white/40 text-xs">{new Date(t.data).toLocaleDateString("pt-BR")}</span>
-            <div><p className="text-white text-sm font-medium">{t.descricao}</p><div className="flex items-center gap-1.5 mt-1 flex-wrap">{t.metodo && <span className="text-white/25 text-xs">{t.metodo}</span>}{t.recorrente && <RotateCcw className="w-3 h-3 text-blue-400/50" />}{t.pago ? <Check className="w-3 h-3 text-emerald-400/50" /> : <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">Pendente</span>}{t.detalhado && t.itens?.length > 0 && <button onClick={() => setExpId(expId === t.id ? null : t.id)} className="text-white/30 hover:text-white/60"><ChevronDown className={`w-3 h-3 transition-transform ${expId === t.id ? "rotate-180" : ""}`} /></button>}{t.tags?.map(tid => { const tg = tags.find(x => x.id === tid); return tg ? <span key={tid} className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: tg.cor + "20", color: tg.cor }}>{tg.nome}</span> : null; })}</div></div>
-            <span className="text-xs px-2 py-1 rounded-md border inline-block w-fit" style={{ borderColor: (categories.find(c => c.nome === t.categoria)?.cor || "#fff") + "40", color: categories.find(c => c.nome === t.categoria)?.cor || "#fff" }}>{t.categoria}</span>
-            <span className={`text-sm font-semibold ${tipo === "receita" ? "text-emerald-400" : "text-red-400"}`}>{tipo === "receita" ? "+" : "-"}{fmt(t.valor)}</span>
-            <div className="flex gap-2"><button onClick={() => { setEI(t); setMO(true); }} className="text-white/30 hover:text-white/60"><Pencil className="w-3.5 h-3.5" /></button><button onClick={() => handleDelete(t.id)} className="text-red-400/40 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button></div>
-          </div>
-          {/* Mobile card */}
-          <div className="md:hidden px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.02]">
-            <div className="flex items-start justify-between mb-1.5">
-              <div className="flex-1 min-w-0">
-                <p className="text-white text-sm font-medium truncate">{t.descricao}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-white/30 text-xs">{new Date(t.data).toLocaleDateString("pt-BR")}</span>
-                  <span className="text-xs px-1.5 py-0.5 rounded-md border" style={{ borderColor: (categories.find(c => c.nome === t.categoria)?.cor || "#fff") + "40", color: categories.find(c => c.nome === t.categoria)?.cor || "#fff" }}>{t.categoria}</span>
-                  {!t.pago && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">Pendente</span>}
-                </div>
+        <div className="hidden md:grid grid-cols-[100px_1fr_140px_130px_100px] gap-2 px-5 py-3 border-b border-white/[0.04] text-white/30 text-xs font-medium">
+          <span>{isDespesa ? "Vencimento" : "Data"}</span><span>Descricao</span><span>Categoria</span><span>Valor</span><span>Acoes</span>
+        </div>
+        {filtered.length > 0 ? filtered.map(renderRow) : (
+          <div className="text-center py-12"><p className="text-white/30 text-sm">{isDespesa ? (tab === "pendentes" ? "Nenhuma despesa pendente" : "Nenhuma despesa finalizada") : "Nenhuma transacao"}</p></div>
+        )}
+      </div>
+      
+      {/* Finalizar Pagamento Modal */}
+      <Dialog open={!!finalizarModal} onOpenChange={() => setFinalizarModal(null)}>
+        <DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-sm">
+          <DialogHeader><DialogTitle className="text-white">Finalizar Pagamento Recorrente</DialogTitle></DialogHeader>
+          {finalizarModal && (
+            <div className="space-y-4 py-2">
+              <div className="bg-white/[0.03] rounded-lg p-3">
+                <p className="text-white text-sm font-medium">{finalizarModal.descricao}</p>
+                <p className="text-white/40 text-xs mt-1">Valor por parcela: {fmt(finalizarModal.valor)}</p>
               </div>
-              <div className="flex items-center gap-3 ml-2">
-                <span className={`text-sm font-semibold whitespace-nowrap ${tipo === "receita" ? "text-emerald-400" : "text-red-400"}`}>{tipo === "receita" ? "+" : "-"}{fmt(t.valor)}</span>
-                <div className="flex gap-1.5">
-                  <button onClick={() => { setEI(t); setMO(true); }} className="text-white/30 hover:text-white/60 p-1"><Pencil className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => handleDelete(t.id)} className="text-red-400/40 hover:text-red-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
-                </div>
+              <Field label="Quantas parcelas pagar de uma vez?">
+                <Sel data-testid="finalizar-qtd" value={finalizarQtd} onChange={e => setFinalizarQtd(e.target.value)}>
+                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+                    <option key={n} value={n}>{n}x = {fmt(finalizarModal.valor * n)}</option>
+                  ))}
+                </Sel>
+              </Field>
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
+                <p className="text-emerald-400 text-xs">Total a pagar: <strong>{fmt(finalizarModal.valor * Number(finalizarQtd))}</strong></p>
+                <p className="text-white/40 text-[10px] mt-1">Sera registrado como {finalizarQtd} despesa(s) paga(s) e a recorrencia sera encerrada.</p>
               </div>
             </div>
-          </div>
-          {expId === t.id && t.itens?.length > 0 && (<div className="px-4 md:px-8 py-3 bg-white/[0.01] border-b border-white/[0.03]">{t.itens.map((it, i) => (<div key={i} className="flex justify-between py-1"><span className="text-white/40 text-xs">{it.nome}</span><span className="text-white/60 text-xs">{fmt(it.valor)}</span></div>))}</div>)}
-        </div>))}
-      </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Btn variant="secondary" onClick={() => setFinalizarModal(null)}>Cancelar</Btn>
+            <Btn data-testid="finalizar-btn" onClick={handleFinalizar}>Finalizar</Btn>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
       <TransactionModal open={modalOpen} onClose={() => { setMO(false); setEI(null); }} onSave={save} item={editItem} tipo={tipo} categories={categories} tags={tags} cards={cards} onCreateInstallmentBatch={createInstallmentBatch} financings={financings} onPayFinancingCustom={payFinancingCustom} />
     </div>
   );

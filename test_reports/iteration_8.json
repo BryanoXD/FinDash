@@ -1,0 +1,98 @@
+{
+  "summary": "Iteration 8 testing complete: All Despesas features verified working. Backend accepts data_vencimento field. Frontend shows Pendentes/Finalizadas tabs with counts, 'Data de Vencimento' label with 'Sem vencimento' toggle for despesas, 'Data' label for receitas, Finalizar modal for recurring despesas, and check mark button for non-recurring despesas.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_despesas_vencimento.py",
+    "/app/test_reports/iteration_8.json"
+  ],
+  "passed_tests": [
+    "Backend: GET /api/health returns healthy",
+    "Backend: Transaction model accepts data_vencimento field",
+    "Backend: POST /api/transactions creates transaction with data_vencimento",
+    "Backend: POST /api/transactions creates transaction without data_vencimento (null)",
+    "Backend: GET /api/transactions returns transactions with data_vencimento field",
+    "Backend: PUT /api/transactions/{id} can update data_vencimento",
+    "Backend: PATCH /api/transactions/{id}/toggle-paid toggles pago status",
+    "Backend: Create recurring despesa works",
+    "Backend: Update recurring despesa to paid and non-recurring works",
+    "Frontend: Despesas page shows 'Pendentes' and 'Finalizadas' tabs (data-testid='despesas-tabs')",
+    "Frontend: Pendentes tab shows only unpaid expenses with count",
+    "Frontend: Finalizadas tab shows only paid expenses with count",
+    "Frontend: TransactionModal for despesa shows 'Data de Vencimento' label",
+    "Frontend: TransactionModal for despesa has 'Sem vencimento' toggle",
+    "Frontend: When 'Sem vencimento' is toggled ON, date picker is hidden and shows registration date text",
+    "Frontend: When 'Sem vencimento' is toggled OFF, date picker for vencimento is shown",
+    "Frontend: TransactionModal for receita shows 'Data' label (not 'Data de Vencimento')",
+    "Frontend: TransactionModal for receita does NOT show 'Sem vencimento' toggle",
+    "Frontend: Receita defaults to pago=true, Despesa defaults to pago=false",
+    "Frontend: Recurring unpaid despesas show 'Finalizar' button (CheckCircle icon)",
+    "Frontend: Clicking 'Finalizar' opens modal with installment quantity selector (data-testid='finalizar-qtd')",
+    "Frontend: Finalizar modal shows total to pay based on quantity selected",
+    "Frontend: Finalizar modal has Finalizar button (data-testid='finalizar-btn')",
+    "Frontend: Desktop table header for despesas shows 'Vencimento' instead of 'Data'",
+    "Frontend: Non-paid non-recurring despesas show check mark button to mark as paid",
+    "Frontend: Marking despesa as paid moves it from Pendentes to Finalizadas tab",
+    "Frontend: 'Sem vencimento' badge shown for despesas without vencimento date",
+    "Frontend: 'Recorrente' badge shown for recurring despesas"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All data-testid attributes are properly implemented: despesas-tabs, tx-modal-vencimento, finalizar-qtd, finalizar-btn",
+    "TransactionModal correctly differentiates between despesa (Data de Vencimento + Sem vencimento toggle) and receita (Data only)",
+    "Tabs correctly filter by pago status: Pendentes (pago=false), Finalizadas (pago=true)",
+    "Finalizar functionality creates N-1 paid copies and marks original as paid+non-recurring",
+    "Column header correctly shows 'Vencimento' for despesas and 'Data' for receitas"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_despesas_vencimento.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "100% (all 16 features verified)"
+  },
+  "test_credentials": "Created temporary test user (test-user-despesas-*) for testing - cleaned up after tests",
+  "seed_data_creation": "Created test user with session, categories, and transactions for testing - all cleaned up",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 8 verified all Despesas features: (1) Backend accepts data_vencimento field in Transaction model; (2) Frontend Despesas page has Pendentes/Finalizadas tabs with counts; (3) TransactionModal for despesa shows 'Data de Vencimento' with 'Sem vencimento' toggle; (4) TransactionModal for receita shows 'Data' only; (5) Recurring unpaid despesas show Finalizar button that opens modal with quantity selector; (6) Non-recurring unpaid despesas show check mark button to mark as paid; (7) Desktop table header shows 'Vencimento' for despesas. All tests passed.",
+  "features_verified": {
+    "data_vencimento_field": {
+      "backend": "VERIFIED - Transaction model accepts data_vencimento (optional string)",
+      "frontend_despesa": "VERIFIED - Shows 'Data de Vencimento' label with 'Sem vencimento' toggle",
+      "frontend_receita": "VERIFIED - Shows 'Data' label only (no vencimento)"
+    },
+    "sem_vencimento_toggle": {
+      "toggle_off": "VERIFIED - Date picker visible for vencimento date",
+      "toggle_on": "VERIFIED - Date picker hidden, shows 'Sem vencimento (registro: DD/MM/YYYY)'"
+    },
+    "pendentes_finalizadas_tabs": {
+      "tabs_present": "VERIFIED - data-testid='despesas-tabs'",
+      "pendentes_filter": "VERIFIED - Shows only pago=false",
+      "finalizadas_filter": "VERIFIED - Shows only pago=true",
+      "counts": "VERIFIED - Both tabs show counts"
+    },
+    "finalizar_recurring": {
+      "button": "VERIFIED - CheckCircle icon button for recurring unpaid despesas",
+      "modal": "VERIFIED - Opens 'Finalizar Pagamento Recorrente' modal",
+      "quantity_selector": "VERIFIED - data-testid='finalizar-qtd'",
+      "total_display": "VERIFIED - Shows 'Total a pagar' based on quantity",
+      "finalizar_btn": "VERIFIED - data-testid='finalizar-btn'"
+    },
+    "mark_as_paid": {
+      "button": "VERIFIED - Check mark button for non-recurring unpaid despesas",
+      "functionality": "VERIFIED - Moves despesa from Pendentes to Finalizadas"
+    },
+    "column_header": {
+      "despesas": "VERIFIED - Shows 'Vencimento' instead of 'Data'",
+      "receitas": "VERIFIED - Shows 'Data'"
+    }
+  }
+}

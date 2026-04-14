@@ -88,7 +88,8 @@ class Transaction(BaseModel):
     categoria_id: str
     valor: float
     tipo: str  # receita, despesa
-    data: str  # ISO date string YYYY-MM-DD
+    data: str  # ISO date string YYYY-MM-DD (data de registro)
+    data_vencimento: Optional[str] = None  # ISO date - para despesas
     metodo: Optional[str] = None
     tags: List[str] = []  # List of tag IDs
     recorrente: bool = False
@@ -104,6 +105,7 @@ class TransactionCreate(BaseModel):
     valor: float
     tipo: str
     data: str
+    data_vencimento: Optional[str] = None
     metodo: Optional[str] = None
     tags: List[str] = []
     recorrente: bool = False
@@ -118,6 +120,7 @@ class TransactionUpdate(BaseModel):
     valor: Optional[float] = None
     tipo: Optional[str] = None
     data: Optional[str] = None
+    data_vencimento: Optional[str] = None
     metodo: Optional[str] = None
     tags: Optional[List[str]] = None
     recorrente: Optional[bool] = None
