@@ -6,12 +6,19 @@ import {
 } from "recharts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
 
-const fmt = (v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+const fmt = (v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v) || 0);
+const fmtNum = (v) => new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v) || 0);
 const fmtC = (v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toString());
 const TP = ["7d", "1m", "3m", "6m", "1y", "5y", "10y", "25y"];
 const Field = ({ label, required, children }) => (<div><label className="text-white/60 text-xs block mb-1.5">{label}{required && " *"}</label>{children}</div>);
 const Inp = (props) => (<input {...props} className={`w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/20 placeholder:text-white/25 ${props.className || ""}`} />);
-const Sel = ({ children, ...rest }) => (<select {...rest} className={`w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/20 [&>option]:bg-[#1a1a1a] ${rest.className || ""}`}>{children}</select>);
+const MoneyInp = ({ value, onChange, ...rest }) => (
+  <div className="relative">
+    <input type="number" step="0.01" placeholder="0,00" value={value} onChange={onChange} {...rest} className={`w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/20 placeholder:text-white/25 pr-2 ${rest.className || ""}`} />
+    {value && Number(value) > 0 && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 text-[10px] pointer-events-none">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 }).format(Number(value))}</span>}
+  </div>
+);
+const Sel = ({ children, ...rest }) => (<select {...rest} className={`w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/20 [color-scheme:dark] [&>option]:bg-[#1a1a1a] [&>option]:text-white ${rest.className || ""}`}>{children}</select>);
 const Btn = ({ children, variant = "primary", ...rest }) => (<button {...rest} className={`text-sm font-medium px-4 py-2.5 rounded-lg transition-colors ${variant === "primary" ? "bg-white text-black hover:bg-gray-100" : "text-white/40 border border-white/[0.08] hover:bg-white/[0.04]"}`}>{children}</button>);
 
 export default function InvestmentsSection() {
@@ -201,7 +208,7 @@ export default function InvestmentsSection() {
       <div className="flex items-center justify-between mb-6">
         <div><h1 className="text-white text-2xl font-bold">Investimentos e Financiamentos</h1><p className="text-white/40 text-sm mt-1">Acompanhe sua carteira</p></div>
         <div className="flex gap-2">
-          <Btn variant="secondary" onClick={() => { setEF(null); setFM(true); }} data-testid="new-financing-btn"><Home className="w-4 h-4 inline mr-1" />Financiamento</Btn>
+          <Btn variant="secondary" onClick={() => { setEF(null); setFM(true); }} data-testid="new-financing-btn"><Home className="w-4 h-4 inline mr-1" />+ Novo Financiamento</Btn>
           <Btn onClick={() => { setEI(null); setMO(true); }} data-testid="new-investment-btn"><Plus className="w-4 h-4 inline mr-1" />Novo Investimento</Btn>
         </div>
       </div>
@@ -325,7 +332,7 @@ export default function InvestmentsSection() {
             <Field label="Nome" required><Inp data-testid="inv-modal-nome" placeholder="Ex: Tesouro Selic" value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} /></Field>
             <Field label="Tipo" required><Sel data-testid="inv-modal-tipo" value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})}><option value="">Selecione</option>{["Renda Fixa","Acoes","FIIs","Crypto","ETF","CDB","LCI/LCA"].map(t => <option key={t} value={t}>{t}</option>)}</Sel></Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Valor (R$)"><Inp data-testid="inv-modal-valor" type="number" placeholder="1000" value={form.valor} onChange={e => setForm({...form, valor: e.target.value})} /></Field>
+              <Field label="Valor (R$)"><MoneyInp data-testid="inv-modal-valor" value={form.valor} onChange={e => setForm({...form, valor: e.target.value})} /></Field>
               <Field label="Rendimento (% a.a.)"><Inp type="number" step="0.01" placeholder="12.5" value={form.rendimento} onChange={e => setForm({...form, rendimento: e.target.value})} /></Field>
             </div>
             <Field label="Conta Bancaria"><Sel value={form.banco_id} onChange={e => setForm({...form, banco_id: e.target.value})}><option value="">Selecione (opcional)</option>{accounts.map(b => <option key={b.id} value={b.id}>{b.nome} - {b.tipo}</option>)}</Sel></Field>
@@ -342,11 +349,11 @@ export default function InvestmentsSection() {
             <Field label="Nome" required><Inp data-testid="fin-modal-nome" placeholder="Ex: Financiamento Apartamento" value={finForm.nome} onChange={e => setFF({...finForm, nome: e.target.value})} /></Field>
             <Field label="Banco"><Sel value={finForm.banco_id} onChange={e => setFF({...finForm, banco_id: e.target.value})}><option value="">Selecione (opcional)</option>{accounts.map(b => <option key={b.id} value={b.id}>{b.nome}</option>)}</Sel></Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Valor Total"><Inp type="number" placeholder="320000" value={finForm.valor_total} onChange={e => setFF({...finForm, valor_total: e.target.value})} /></Field>
+              <Field label="Valor Total"><MoneyInp value={finForm.valor_total} onChange={e => setFF({...finForm, valor_total: e.target.value})} /></Field>
               <Field label="Parcelas"><Inp type="number" placeholder="360" value={finForm.parcelas} onChange={e => setFF({...finForm, parcelas: e.target.value})} /></Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Valor Parcela"><Inp type="number" placeholder="1850" value={finForm.valor_parcela} onChange={e => setFF({...finForm, valor_parcela: e.target.value})} /></Field>
+              <Field label="Valor Parcela"><MoneyInp value={finForm.valor_parcela} onChange={e => setFF({...finForm, valor_parcela: e.target.value})} /></Field>
               <Field label="Taxa (% a.a.)"><Inp type="number" step="0.1" placeholder="8.5" value={finForm.taxa} onChange={e => setFF({...finForm, taxa: e.target.value})} /></Field>
             </div>
           </div>

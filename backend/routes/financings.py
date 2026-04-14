@@ -58,7 +58,7 @@ async def delete_financing(financing_id: str, request: Request, db=None, user_id
 
 @router.post("/{financing_id}/pay-installment")
 async def pay_financing_installment(financing_id: str, request: Request, db=None, user_id: str = None):
-    """Pay a financing installment"""
+    """Pay a financing installment - abate valor_parcela do saldo total"""
     financing = await db.financings.find_one({"id": financing_id, "user_id": user_id}, {"_id": 0})
     if not financing:
         raise HTTPException(status_code=404, detail="Financing not found")
@@ -68,14 +68,17 @@ async def pay_financing_installment(financing_id: str, request: Request, db=None
     
     new_parcela = financing["parcela_atual"] + 1
     new_valor_pago = financing["valor_pago"] + financing["valor_parcela"]
-    status = "quitado" if new_parcela >= financing["parcelas"] else "ativo"
+    new_valor_total = financing["valor_total"] - financing["valor_parcela"]
+    if new_valor_total < 0:
+        new_valor_total = 0
+    status = "quitado" if new_parcela >= financing["parcelas"] or new_valor_total <= 0 else "ativo"
     
     await db.financings.update_one(
         {"id": financing_id, "user_id": user_id},
-        {"$set": {"parcela_atual": new_parcela, "valor_pago": new_valor_pago, "status": status}}
+        {"$set": {"parcela_atual": new_parcela, "valor_pago": new_valor_pago, "valor_total": new_valor_total, "status": status}}
     )
     
-    return {"message": "Installment paid", "parcela_atual": new_parcela, "status": status}
+    return {"message": "Installment paid", "parcela_atual": new_parcela, "valor_total": new_valor_total, "status": status}
 
 
 @router.post("/{financing_id}/pay-custom")
@@ -92,11 +95,14 @@ async def pay_financing_custom(financing_id: str, request: Request, db=None, use
     
     new_valor_pago = financing["valor_pago"] + valor
     new_parcela = financing["parcela_atual"] + 1
-    status = "quitado" if new_valor_pago >= financing["valor_total"] else "ativo"
+    new_valor_total = financing["valor_total"] - valor
+    if new_valor_total < 0:
+        new_valor_total = 0
+    status = "quitado" if new_valor_pago >= financing["valor_total"] or new_valor_total <= 0 else "ativo"
     
     await db.financings.update_one(
         {"id": financing_id, "user_id": user_id},
-        {"$set": {"valor_pago": new_valor_pago, "parcela_atual": new_parcela, "status": status}}
+        {"$set": {"valor_pago": new_valor_pago, "parcela_atual": new_parcela, "valor_total": new_valor_total, "status": status}}
     )
     
-    return {"message": "Payment applied", "valor_pago": new_valor_pago, "parcela_atual": new_parcela, "status": status}
+    return {"message": "Payment applied", "valor_pago": new_valor_pago, "parcela_atual": new_parcela, "valor_total": new_valor_total, "status": status}
