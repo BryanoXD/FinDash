@@ -282,13 +282,13 @@ export default function InvestmentsSection() {
                   <div className="flex items-center gap-2 mt-4 pt-3 border-t border-white/[0.06]">
                     {aporteModal === inv.id ? (
                       <div className="flex items-center gap-2 flex-1">
-                        <Inp type="number" value={aporteVal} onChange={e => setAV(e.target.value)} placeholder="Valor" className="!py-2 text-xs" autoFocus />
+                        <MoneyInp value={aporteVal} onValueChange={v => setAV(v)} className="!py-2 text-xs" autoFocus />
                         <button onClick={() => handleAporte(inv.id)} className="bg-emerald-500/20 text-emerald-400 text-xs font-medium px-3 py-2 rounded-lg hover:bg-emerald-500/30">OK</button>
                         <button onClick={() => { setAM(null); setAV(""); }} className="text-white/30 p-2"><X className="w-4 h-4" /></button>
                       </div>
                     ) : saqueModal === inv.id ? (
                       <div className="flex items-center gap-2 flex-1">
-                        <Inp type="number" value={saqueVal} onChange={e => setSaqueVal(e.target.value)} placeholder="Valor" className="!py-2 text-xs" autoFocus />
+                        <MoneyInp value={saqueVal} onValueChange={v => setSaqueVal(v)} className="!py-2 text-xs" autoFocus />
                         <button onClick={() => handleResgate(inv.id)} className="bg-red-500/20 text-red-400 text-xs font-medium px-3 py-2 rounded-lg hover:bg-red-500/30">OK</button>
                         <button onClick={() => { setSaqueModal(null); setSaqueVal(""); }} className="text-white/30 p-2"><X className="w-4 h-4" /></button>
                       </div>
@@ -401,13 +401,13 @@ export default function InvestmentsSection() {
                   <div className="pt-3 border-t border-white/[0.06]">
                     {goalAporteId === g.id ? (
                       <div className="flex items-center gap-2">
-                        <Inp type="number" value={goalAporteVal} onChange={e => setGoalAporteVal(e.target.value)} placeholder="Valor" className="!py-2 text-xs" autoFocus />
+                        <MoneyInp value={goalAporteVal} onValueChange={v => setGoalAporteVal(v)} className="!py-2 text-xs" autoFocus />
                         <button onClick={() => handleGoalAporte(g.id)} className="bg-emerald-500/20 text-emerald-400 text-xs font-medium px-3 py-2 rounded-lg">OK</button>
                         <button onClick={() => { setGoalAporteId(null); setGoalAporteVal(""); }} className="text-white/30 p-2"><X className="w-4 h-4" /></button>
                       </div>
                     ) : goalSaqueId === g.id ? (
                       <div className="flex items-center gap-2">
-                        <Inp type="number" value={goalSaqueVal} onChange={e => setGoalSaqueVal(e.target.value)} placeholder="Valor" className="!py-2 text-xs" autoFocus />
+                        <MoneyInp value={goalSaqueVal} onValueChange={v => setGoalSaqueVal(v)} className="!py-2 text-xs" autoFocus />
                         <button onClick={() => handleGoalSaque(g.id)} className="bg-red-500/20 text-red-400 text-xs font-medium px-3 py-2 rounded-lg">OK</button>
                         <button onClick={() => { setGoalSaqueId(null); setGoalSaqueVal(""); }} className="text-white/30 p-2"><X className="w-4 h-4" /></button>
                       </div>
@@ -435,7 +435,7 @@ export default function InvestmentsSection() {
           <DialogHeader><DialogTitle className="text-white">{editGoal ? "Editar" : "Nova"} Meta</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <Field label="Nome" required><Inp data-testid="goal-modal-nome" placeholder="Ex: Viagem" value={goalForm.nome} onChange={e => setGoalForm({...goalForm, nome: e.target.value})} /></Field>
-            <Field label="Valor Meta (R$)" required><Inp type="number" placeholder="10000" value={goalForm.valor_meta} onChange={e => setGoalForm({...goalForm, valor_meta: e.target.value})} /></Field>
+            <Field label="Valor Meta (R$)" required><MoneyInp value={goalForm.valor_meta} onValueChange={v => setGoalForm({...goalForm, valor_meta: v})} /></Field>
             <Field label="Prazo"><Inp type="date" value={goalForm.prazo} onChange={e => setGoalForm({...goalForm, prazo: e.target.value})} className="[color-scheme:dark]" /></Field>
           </div>
           <DialogFooter className="gap-2"><Btn variant="secondary" onClick={() => { setGoalModal(false); setEditGoal(null); }}>Cancelar</Btn><Btn data-testid="goal-modal-save" onClick={saveGoal}>{editGoal ? "Salvar" : "Criar"}</Btn></DialogFooter>
