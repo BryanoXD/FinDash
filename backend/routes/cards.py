@@ -43,19 +43,39 @@ async def recalculate_card_totals(card_id: str, user_id: str, db):
 async def get_cards(request: Request, db=None, user_id: str = None):
     """Get all credit cards for current user with recalculated totals"""
     cards = await db.cards.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
+    if not cards:
+        return cards
+    
+    card_ids = [c["id"] for c in cards]
+    
+    # Batch: buscar todas parcelas de todos os cartoes de uma vez
+    all_installments = await db.installments.find(
+        {"card_id": {"$in": card_ids}, "user_id": user_id},
+        {"_id": 0, "card_id": 1, "valor_parcela": 1, "pago": 1}
+    ).to_list(10000)
     
     # Batch: buscar todos os bancos de uma vez
     banco_ids = [c["banco_id"] for c in cards if c.get("banco_id")]
     account_map = {}
     if banco_ids:
-        accounts = await db.accounts.find({"id": {"$in": banco_ids}}, {"_id": 0}).to_list(1000)
-        account_map = {a["id"]: a for a in accounts}
+        accounts_list = await db.accounts.find({"id": {"$in": banco_ids}}, {"_id": 0}).to_list(1000)
+        account_map = {a["id"]: a for a in accounts_list}
     
+    # Calcular totais por cartao em memoria
     for card in cards:
-        totals = await recalculate_card_totals(card["id"], user_id, db)
-        card["fatura_atual"] = totals["fatura_atual"]
-        card["usado"] = totals["usado"]
+        card_installments = [i for i in all_installments if i["card_id"] == card["id"]]
+        unpaid = [i for i in card_installments if not i.get("pago")]
+        fatura_atual = sum(i["valor_parcela"] for i in unpaid)
+        usado = sum(i["valor_parcela"] for i in card_installments)
+        card["fatura_atual"] = fatura_atual
+        card["usado"] = usado
         card["banco_nome"] = account_map.get(card.get("banco_id"), {}).get("nome") if card.get("banco_id") else None
+        
+        # Atualizar no DB
+        await db.cards.update_one(
+            {"id": card["id"], "user_id": user_id},
+            {"$set": {"fatura_atual": fatura_atual, "usado": usado}}
+        )
     
     return cards
 

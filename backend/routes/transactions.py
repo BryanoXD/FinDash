@@ -11,24 +11,14 @@ router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 
 async def recalculate_budget_spent(categoria_id: str, user_id: str, db):
-    """
-    Recalcula o gasto de um orçamento baseado nas despesas pagas da categoria
-    REGRA: gasto = soma das despesas pagas da categoria
-    """
-    # Busca todas as despesas pagas desta categoria
-    transactions = await db.transactions.find(
-        {
-            "user_id": user_id,
-            "categoria_id": categoria_id,
-            "tipo": "despesa",
-            "pago": True
-        },
-        {"_id": 0, "valor": 1}
-    ).to_list(10000)
+    """Recalcula gasto via aggregation pipeline"""
+    pipeline = [
+        {"$match": {"user_id": user_id, "categoria_id": categoria_id, "tipo": "despesa", "pago": True}},
+        {"$group": {"_id": None, "total": {"$sum": "$valor"}}}
+    ]
+    result = await db.transactions.aggregate(pipeline).to_list(1)
+    total_gasto = result[0]["total"] if result else 0
     
-    total_gasto = sum(t["valor"] for t in transactions)
-    
-    # Atualiza o orçamento se existir
     await db.budgets.update_one(
         {"user_id": user_id, "categoria_id": categoria_id},
         {"$set": {"gasto": total_gasto}}
@@ -147,10 +137,14 @@ async def delete_transaction(transaction_id: str, request: Request, db=None, use
 @router.get("/summary")
 async def get_transaction_summary(request: Request, db=None, user_id: str = None):
     """Get summary of transactions (receitas, despesas, saldo)"""
-    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0, "tipo": 1, "valor": 1}).to_list(10000)
-    
-    receitas = sum(t["valor"] for t in transactions if t["tipo"] == "receita")
-    despesas = sum(t["valor"] for t in transactions if t["tipo"] == "despesa")
+    pipeline = [
+        {"$match": {"user_id": user_id}},
+        {"$group": {"_id": "$tipo", "total": {"$sum": "$valor"}}}
+    ]
+    result = await db.transactions.aggregate(pipeline).to_list(10)
+    totals = {r["_id"]: r["total"] for r in result}
+    receitas = totals.get("receita", 0)
+    despesas = totals.get("despesa", 0)
     
     return {
         "receitas": receitas,
