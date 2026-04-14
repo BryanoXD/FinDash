@@ -44,19 +44,18 @@ async def get_cards(request: Request, db=None, user_id: str = None):
     """Get all credit cards for current user with recalculated totals"""
     cards = await db.cards.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
     
-    # Recalcular totais e adicionar banco_nome para cada cartão
+    # Batch: buscar todos os bancos de uma vez
+    banco_ids = [c["banco_id"] for c in cards if c.get("banco_id")]
+    account_map = {}
+    if banco_ids:
+        accounts = await db.accounts.find({"id": {"$in": banco_ids}}, {"_id": 0}).to_list(1000)
+        account_map = {a["id"]: a for a in accounts}
+    
     for card in cards:
-        # Recalcular fatura e usado
         totals = await recalculate_card_totals(card["id"], user_id, db)
         card["fatura_atual"] = totals["fatura_atual"]
         card["usado"] = totals["usado"]
-        
-        # Adicionar nome do banco
-        if card.get("banco_id"):
-            account = await db.accounts.find_one({"id": card["banco_id"]}, {"_id": 0})
-            card["banco_nome"] = account["nome"] if account else None
-        else:
-            card["banco_nome"] = None
+        card["banco_nome"] = account_map.get(card.get("banco_id"), {}).get("nome") if card.get("banco_id") else None
     
     return cards
 

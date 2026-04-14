@@ -16,11 +16,15 @@ async def get_investments(request: Request, db=None, user_id: str = None):
     """Get all investments for current user"""
     investments = await db.investments.find({"user_id": user_id}, {"_id": 0}).to_list(1000)
     
-    # Add banco_nome for each investment
+    # Batch: buscar todos os bancos de uma vez
+    banco_ids = [i["banco_id"] for i in investments if i.get("banco_id")]
+    account_map = {}
+    if banco_ids:
+        accounts = await db.accounts.find({"id": {"$in": banco_ids}}, {"_id": 0}).to_list(1000)
+        account_map = {a["id"]: a for a in accounts}
+    
     for inv in investments:
-        if inv.get("banco_id"):
-            account = await db.accounts.find_one({"id": inv["banco_id"]}, {"_id": 0})
-            inv["banco_nome"] = account["nome"] if account else None
+        inv["banco_nome"] = account_map.get(inv.get("banco_id"), {}).get("nome") if inv.get("banco_id") else None
     
     return investments
 

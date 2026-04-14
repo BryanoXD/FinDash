@@ -23,7 +23,7 @@ async def recalculate_budget_spent(categoria_id: str, user_id: str, db):
             "tipo": "despesa",
             "pago": True
         },
-        {"_id": 0}
+        {"_id": 0, "valor": 1}
     ).to_list(10000)
     
     total_gasto = sum(t["valor"] for t in transactions)
@@ -147,7 +147,7 @@ async def delete_transaction(transaction_id: str, request: Request, db=None, use
 @router.get("/summary")
 async def get_transaction_summary(request: Request, db=None, user_id: str = None):
     """Get summary of transactions (receitas, despesas, saldo)"""
-    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0}).to_list(10000)
+    transactions = await db.transactions.find({"user_id": user_id}, {"_id": 0, "tipo": 1, "valor": 1}).to_list(10000)
     
     receitas = sum(t["valor"] for t in transactions if t["tipo"] == "receita")
     despesas = sum(t["valor"] for t in transactions if t["tipo"] == "despesa")
