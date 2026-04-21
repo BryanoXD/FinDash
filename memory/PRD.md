@@ -30,10 +30,20 @@ frontend/
 
 ## P0/P1 - Nenhum pendente
 
+### Verificacao (21/04/2026) - Import Flow
+- Backend `/api/import/upload` aceita JSON `{file_base64, filename}` com wrapper FakeFile (server.py:578-646)
+- Backend tambem aceita multipart FormData como fallback
+- Frontend api.js converte arquivo para base64 e envia via JSON (api.js:311-352)
+- Tabela de preview em `ImportSection` (OtherSections.jsx:708-755) estruturada corretamente: `<div><table><thead><tr><th></th></tr></thead><tbody><tr><td></td></tr></tbody></table></div>` - sem erro de DOM nesting
+- Mensagens de erro descritivas: "Formato nao suportado", "Arquivo vazio", "Arquivo muito grande", "Sessao expirada", erros de rede
+- Lint: limpo em todos os arquivos editados
+
 ## P2
-1. Fluxo de Caixa PDF
-2. Analise de Gastos PDF
-3. Heatmap com dados reais
+1. Feedback loop de auto-categorizacao (salvar correcoes do usuario para melhorar sugestoes futuras)
+2. Fluxo de Caixa PDF
+3. Analise de Gastos PDF
+4. Heatmap com dados reais
 
 ## P3
 - Multi-idioma, Tema claro/escuro, PWA mobile
+- Refatorar OtherSections.jsx (quebrar ImportSection e ReportsSection em arquivos proprios)
