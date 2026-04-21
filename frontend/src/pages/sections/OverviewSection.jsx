@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../../context/DataContext";
+import { fmt, fmtCompact } from "../../lib/formatters";
 import {
   TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownLeft,
   Eye, EyeOff, Plus, DollarSign, Briefcase, Home, ShoppingCart,
@@ -15,9 +16,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../componen
 
 const iconMap = { Briefcase, Home, ShoppingCart, Tv, Car, Heart, GraduationCap, TrendingUp, ArrowDownLeft, Palette: Briefcase, Target, Shield, DollarSign };
 
-const formatCurrency = (v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v) || 0);
-const formatCompact = (v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toString());
-
 const TIME_PERIODS = ["7d", "1m", "3m", "6m", "1y", "5y", "10y", "25y"];
 
 function SummaryCard({ title, value, variacao, icon: Icon, iconColor, showBalance }) {
@@ -31,7 +29,7 @@ function SummaryCard({ title, value, variacao, icon: Icon, iconColor, showBalanc
         </div>
       </div>
       <div className="text-white text-lg sm:text-2xl font-bold mb-1.5">
-        {showBalance ? formatCurrency(value) : "R$ ------"}
+        {showBalance ? fmt(value) : "R$ ------"}
       </div>
       <div className={`flex items-center gap-1 text-xs font-medium ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
         {isPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
@@ -56,11 +54,11 @@ function DueCard({ title, subtitle, icon: Icon, iconBg, receitas, despesas, onCl
       <div className="flex gap-6 sm:gap-8">
         <div>
           <p className="text-white/40 text-xs mb-1">Receitas</p>
-          <p className="text-emerald-400 font-semibold text-xs sm:text-sm">{formatCurrency(receitas)}</p>
+          <p className="text-emerald-400 font-semibold text-xs sm:text-sm">{fmt(receitas)}</p>
         </div>
         <div>
           <p className="text-white/40 text-xs mb-1">Despesas</p>
-          <p className="text-red-400 font-semibold text-xs sm:text-sm">{formatCurrency(despesas)}</p>
+          <p className="text-red-400 font-semibold text-xs sm:text-sm">{fmt(despesas)}</p>
         </div>
       </div>
     </div>
@@ -321,11 +319,11 @@ export default function OverviewSection() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                 <XAxis dataKey="name" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={formatCompact} />
+                <YAxis tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={fmtCompact} />
                 <Tooltip
                   contentStyle={{ backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px" }}
                   labelStyle={{ color: "#fff" }}
-                  formatter={(value) => formatCurrency(value)}
+                  formatter={(value) => fmt(value)}
                 />
                 <Area type="monotone" dataKey="receitas" stroke="#22c55e" fill="url(#colorReceitas)" strokeWidth={2} />
                 <Area type="monotone" dataKey="despesas" stroke="#ef4444" fill="url(#colorDespesas)" strokeWidth={2} />
@@ -357,7 +355,7 @@ export default function OverviewSection() {
                         <div className="h-full rounded-full" style={{ width: `${percentage}%`, backgroundColor: cat.cor }} />
                       </div>
                     </div>
-                    <span className="text-white text-sm font-medium w-24 text-right">{formatCurrency(cat.valor)}</span>
+                    <span className="text-white text-sm font-medium w-24 text-right">{fmt(cat.valor)}</span>
                   </div>
                 );
               })}
@@ -389,12 +387,12 @@ export default function OverviewSection() {
                     </div>
                     <div>
                       <p className="text-white font-medium text-sm">{goal.nome}</p>
-                      <p className="text-white/40 text-xs">Meta: {formatCurrency(goal.valor_meta)}</p>
+                      <p className="text-white/40 text-xs">Meta: {fmt(goal.valor_meta)}</p>
                     </div>
                   </div>
                   <div className="mb-3">
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-white/50">{formatCurrency(goal.valor_atual)}</span>
+                      <span className="text-white/50">{fmt(goal.valor_atual)}</span>
                       <span className="text-emerald-400">{progress.toFixed(1)}%</span>
                     </div>
                     <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
@@ -518,7 +516,7 @@ export default function OverviewSection() {
                     </div>
                   </div>
                   <span className={`text-sm font-semibold ${t.tipo === 'receita' ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {t.tipo === 'receita' ? '+' : '-'}{formatCurrency(t.valor)}
+                    {t.tipo === 'receita' ? '+' : '-'}{fmt(t.valor)}
                   </span>
                 </div>
               ))
@@ -541,14 +539,14 @@ export default function OverviewSection() {
                 <TrendingUp className="w-4 h-4 text-emerald-400" />
                 <span className="text-white text-sm">Receitas</span>
               </div>
-              <span className="text-emerald-400 text-sm font-semibold">{formatCurrency(summary.receitas)}</span>
+              <span className="text-emerald-400 text-sm font-semibold">{fmt(summary.receitas)}</span>
             </div>
             <div className="flex items-center justify-between py-3 px-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
               <div className="flex items-center gap-2">
                 <TrendingDown className="w-4 h-4 text-red-400" />
                 <span className="text-white text-sm">Despesas</span>
               </div>
-              <span className="text-red-400 text-sm font-semibold">-{formatCurrency(summary.despesas)}</span>
+              <span className="text-red-400 text-sm font-semibold">-{fmt(summary.despesas)}</span>
             </div>
             {saldoBreakdown.accounts.length > 0 && (
               <>
@@ -560,7 +558,7 @@ export default function OverviewSection() {
                       <span className="text-white text-sm">{a.nome}</span>
                       <span className="text-white/30 text-xs">{a.tipo}</span>
                     </div>
-                    <span className="text-white text-sm font-semibold">{formatCurrency(a.valor)}</span>
+                    <span className="text-white text-sm font-semibold">{fmt(a.valor)}</span>
                   </div>
                 ))}
               </>
@@ -571,12 +569,12 @@ export default function OverviewSection() {
                   <TrendingUp className="w-4 h-4 text-purple-400" />
                   <span className="text-white text-sm">Investimentos</span>
                 </div>
-                <span className="text-purple-400 text-sm font-semibold">{formatCurrency(saldoBreakdown.investimentos)}</span>
+                <span className="text-purple-400 text-sm font-semibold">{fmt(saldoBreakdown.investimentos)}</span>
               </div>
             )}
             <div className="flex items-center justify-between py-3 px-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 mt-2">
               <span className="text-white font-medium">Total</span>
-              <span className="text-white font-bold text-lg">{formatCurrency(summary.saldoTotal)}</span>
+              <span className="text-white font-bold text-lg">{fmt(summary.saldoTotal)}</span>
             </div>
           </div>
         </DialogContent>

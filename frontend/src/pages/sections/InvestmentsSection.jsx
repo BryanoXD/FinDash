@@ -1,40 +1,14 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../../context/DataContext";
+import { fmt, fmtCompactompact } from "../../lib/formatters";
+import { Field, Inp, MoneyInp, Sel, Btn } from "../../components/shared/FormComponents";
 import { TrendingUp, Plus, X, Minus, DollarSign, Calendar, Pencil, Trash2, Landmark, Home, Target } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
 
-const fmt = (v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v) || 0);
-const fmtNum = (v) => new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(v) || 0);
-const fmtC = (v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toString());
 const TP = ["7d", "1m", "3m", "6m", "1y", "5y", "10y", "25y"];
-const Field = ({ label, required, children }) => (<div><label className="text-white/60 text-xs block mb-1.5">{label}{required && " *"}</label>{children}</div>);
-const Inp = (props) => (<input {...props} className={`w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/20 placeholder:text-white/25 ${props.className || ""}`} />);
-const MoneyInp = ({ value, onValueChange, ...rest }) => {
-  const formatFromNum = (num) => {
-    if (!num && num !== 0) return "";
-    const fixed = Number(num).toFixed(2);
-    const [int, dec] = fixed.split(".");
-    return int.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + dec;
-  };
-  const [display, setDisplay] = React.useState(() => value ? formatFromNum(value) : "");
-  React.useEffect(() => { if (!value && value !== 0) setDisplay(""); }, [value]);
-  const handleChange = (e) => {
-    let raw = e.target.value.replace(/[^\d]/g, "");
-    if (!raw) { setDisplay(""); onValueChange(""); return; }
-    raw = raw.replace(/^0+/, "") || "0";
-    while (raw.length < 3) raw = "0" + raw;
-    const cents = raw.slice(-2);
-    let intPart = raw.slice(0, -2).replace(/^0+/, "") || "0";
-    setDisplay(intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + cents);
-    onValueChange(parseFloat(intPart + "." + cents));
-  };
-  return <input {...rest} type="text" inputMode="numeric" placeholder="0,00" value={display} onChange={handleChange} className={`w-full bg-white/[0.06] border border-white/[0.1] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/20 placeholder:text-white/25 ${rest.className || ""}`} />;
-};
-const Sel = ({ children, ...rest }) => (<select {...rest} className={`w-full bg-[#1a1a1a] border border-white/[0.1] rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/20 ${rest.className || ""}`} style={{ colorScheme: 'dark' }}>{children}</select>);
-const Btn = ({ children, variant = "primary", ...rest }) => (<button {...rest} className={`text-sm font-medium px-4 py-2.5 rounded-lg transition-colors ${variant === "primary" ? "bg-white text-black hover:bg-gray-100" : "text-white/40 border border-white/[0.08] hover:bg-white/[0.04]"}`}>{children}</button>);
 
 export default function InvestmentsSection() {
   const {
@@ -247,7 +221,7 @@ export default function InvestmentsSection() {
               <defs><linearGradient id="cInv" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#a78bfa" stopOpacity={0.3} /><stop offset="95%" stopColor="#a78bfa" stopOpacity={0} /></linearGradient></defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
               <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 11 }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 11 }} tickFormatter={fmtC} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 11 }} tickFormatter={fmtCompact} />
               <Tooltip contentStyle={{ backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", color: "white", fontSize: 13 }} formatter={(v) => [fmt(v)]} />
               <Area type="monotone" dataKey="valor" stroke="#a78bfa" strokeWidth={2} fill="url(#cInv)" />
             </AreaChart>
@@ -546,7 +520,7 @@ export function SimuladorSection() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
               <XAxis dataKey="ano" axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 11 }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 11 }} tickFormatter={fmtC} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 11 }} tickFormatter={fmtCompact} />
               <Tooltip contentStyle={{ backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", color: "white", fontSize: 13 }} formatter={(v) => [fmt(v)]} />
               <Area type="monotone" dataKey="nominal" stroke="#34d399" strokeWidth={2} fill="url(#gNom)" />
               <Area type="monotone" dataKey="real" stroke="#60a5fa" strokeWidth={2} fill="url(#gReal)" />
