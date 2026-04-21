@@ -302,18 +302,18 @@ export const goalsAPI = {
 // Import API
 const importAPI = {
   upload: async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await fetch(`${API_BASE}/api/import/upload`, {
-      method: 'POST',
-      body: formData,
-      credentials: 'include',
+    // Convert file to base64 (bypasses proxy multipart issues)
+    const toBase64 = (f) => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(f);
     });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.detail || `Upload failed: ${response.status}`);
-    }
-    return response.json();
+    const fileBase64 = await toBase64(file);
+    return apiCall('/api/import/upload', {
+      method: 'POST',
+      body: JSON.stringify({ file_base64: fileBase64, filename: file.name }),
+    });
   },
   confirm: (data) =>
     apiCall('/api/import/confirm', {

@@ -576,9 +576,74 @@ async def contribute_to_goal(goal_id: str, data: goals.GoalContributionCreate, r
 from fastapi import UploadFile, File
 
 @app.post("/api/import/upload")
-async def import_upload(file: UploadFile = File(...), request: Request = None):
+async def import_upload(request: Request):
+    """Upload file as base64 JSON (bypasses proxy multipart issues) or as multipart FormData."""
     user_id = await get_current_user_id(request, db)
-    return await imports_route.upload_and_parse(file, request, db=db, user_id=user_id)
+    
+    content_type = request.headers.get("content-type", "")
+    
+    # Approach 1: JSON with base64 (preferred - works through all proxies)
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="JSON invalido no body da requisicao")
+        
+        import base64
+        file_b64 = body.get("file_base64")
+        filename = body.get("filename", "upload.csv")
+        
+        if not file_b64:
+            raise HTTPException(status_code=400, detail="Campo 'file_base64' nao encontrado no body")
+        
+        try:
+            file_content = base64.b64decode(file_b64)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Erro ao decodificar base64 do arquivo")
+        
+        if len(file_content) == 0:
+            raise HTTPException(status_code=400, detail="Arquivo vazio")
+        if len(file_content) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Arquivo muito grande. Maximo 10MB.")
+        
+        # Create a fake UploadFile-like object
+        class FakeUploadFile:
+            def __init__(self, fn, ct):
+                self.filename = fn
+                self.content = ct
+            async def read(self):
+                return self.content
+        
+        fake_file = FakeUploadFile(filename, file_content)
+        return await imports_route.upload_and_parse(fake_file, request, db=db, user_id=user_id)
+    
+    # Approach 2: Multipart FormData (works in some environments)
+    else:
+        try:
+            form = await request.form()
+            file = form.get("file")
+            if not file:
+                raise HTTPException(status_code=400, detail="Campo 'file' nao encontrado. Envie o arquivo como FormData com campo 'file' ou como JSON com campo 'file_base64'.")
+            
+            content = await file.read()
+            if len(content) == 0:
+                raise HTTPException(status_code=400, detail="Arquivo vazio")
+            if len(content) > 10 * 1024 * 1024:
+                raise HTTPException(status_code=400, detail="Arquivo muito grande. Maximo 10MB.")
+            
+            class FormFile:
+                def __init__(self, fn, ct):
+                    self.filename = fn
+                    self.content = ct
+                async def read(self):
+                    return self.content
+            
+            form_file = FormFile(file.filename, content)
+            return await imports_route.upload_and_parse(form_file, request, db=db, user_id=user_id)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Erro ao processar upload multipart: {str(e)}. Tente enviar como JSON com base64.")
 
 @app.post("/api/import/confirm")
 async def import_confirm(request: Request):
