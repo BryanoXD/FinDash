@@ -54,7 +54,7 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
     const valorTotal = Number(form.valor);
     const parcelas = Number(form.parcelas) || 1;
     
-    if (form.metodo === "Crédito" && form.card_id && isDespesa && onCreateInstallmentBatch) {
+    if (form.metodo === "Credito" && form.card_id && isDespesa && onCreateInstallmentBatch) {
       try {
         await onCreateInstallmentBatch({ card_id: form.card_id, descricao: form.descricao, valor_total: valorTotal, total_parcelas: parcelas, data: form.data });
       } catch (error) { console.error('Error creating installments:', error); }
@@ -78,7 +78,7 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
         tipo,
         data: form.sem_vencimento ? today : (isDespesa ? (form.data_vencimento || today) : form.data),
         data_vencimento: isDespesa && !form.sem_vencimento ? (form.data_vencimento || null) : null,
-        pago: form.metodo === "Crédito" ? false : form.pago
+        pago: form.metodo === "Credito" ? false : form.pago
       });
     }
     onClose(); 
@@ -86,7 +86,7 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
   
   const filteredCats = categories.filter(c => c.tipo === tipo || c.tipo === "ambos");
   const valorParcela = form.valor && form.parcelas > 1 ? (Number(form.valor) / Number(form.parcelas)).toFixed(2) : null;
-  const isCredito = form.metodo === "Crédito";
+  const isCredito = form.metodo === "Credito";
   
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -134,7 +134,7 @@ function TransactionModal({ open, onClose, onSave, item, tipo, categories, tags,
           )}
           <Field label="Descricao" required><Inp data-testid="tx-modal-descricao" placeholder="Descreva a transacao" value={form.descricao} onChange={e => setForm({...form, descricao: e.target.value})} /></Field>
           <Field label={tipo === "receita" ? "Metodo de Recebimento" : "Metodo de Pagamento"}>
-            <Sel data-testid="tx-modal-metodo" value={form.metodo} onChange={e => setForm({...form, metodo: e.target.value, card_id: e.target.value !== "Crédito" ? "" : form.card_id})}>
+            <Sel data-testid="tx-modal-metodo" value={form.metodo} onChange={e => setForm({...form, metodo: e.target.value, card_id: e.target.value !== "Credito" ? "" : form.card_id})}>
               <option value="">Selecione (opcional)</option>
               {["Pix","Transferencia","Debito","Credito","Dinheiro","Boleto"].map(m => <option key={m} value={m}>{m}</option>)}
             </Sel>

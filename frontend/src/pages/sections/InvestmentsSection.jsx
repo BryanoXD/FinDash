@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../../context/DataContext";
-import { fmt, fmtCompactompact } from "../../lib/formatters";
+import { fmt, fmtCompact } from "../../lib/formatters";
 import { Field, Inp, MoneyInp, Sel, Btn } from "../../components/shared/FormComponents";
 import { TrendingUp, Plus, X, Minus, DollarSign, Calendar, Pencil, Trash2, Landmark, Home, Target } from "lucide-react";
 import {
