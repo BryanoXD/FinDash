@@ -380,6 +380,7 @@ export function DataProvider({ children, user }) {
     
     // Actions
     loadAllData,
+    refreshData: loadAllData,
     createCategory, updateCategory, deleteCategory,
     createTag, updateTag, deleteTag,
     createTransaction, updateTransaction, deleteTransaction, toggleTransactionPaid,

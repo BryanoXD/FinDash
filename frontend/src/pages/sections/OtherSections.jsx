@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useData } from "../../context/DataContext";
+import api from "../../services/api";
 import {
   Plus, Pencil, Trash2, X, Search, Download, Calendar, PieChart,
   BarChart3, Target, ChevronDown, RotateCcw, Check, Info, CheckCircle,
@@ -584,7 +585,260 @@ export function MetasSection() {
 }
 
 export function ImportSection() {
-  return (<div><div className="mb-6"><h1 className="text-white text-2xl font-bold">Importar Extratos</h1><p className="text-white/40 text-sm mt-1">Importe extratos bancários</p></div><div className="bg-[#111111] border border-dashed border-white/[0.1] rounded-xl p-12 flex flex-col items-center justify-center"><div className="w-16 h-16 bg-white/[0.04] rounded-xl flex items-center justify-center mb-4"><Download className="w-8 h-8 text-white/30" /></div><p className="text-white/60 text-sm font-medium mb-1">Arraste seu extrato aqui</p><p className="text-white/30 text-xs mb-4">Formatos: CSV, OFX, PDF</p><Btn>Selecionar Arquivo</Btn></div></div>);
+  const { refreshData } = useData();
+  const [step, setStep] = useState("upload"); // upload | parsing | preview | importing | done | error
+  const [dragOver, setDragOver] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [batchData, setBatchData] = useState(null);
+  const [selected, setSelected] = useState(new Set());
+  const [edits, setEdits] = useState({});
+  const [importResult, setImportResult] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const fileRef = React.useRef(null);
+
+  const ALLOWED = [".csv", ".ofx", ".pdf"];
+
+  // Carregar histórico
+  React.useEffect(() => {
+    api.import.history().then(setHistory).catch(() => {});
+  }, [step]);
+
+  const handleFile = async (file) => {
+    const ext = "." + file.name.split(".").pop().toLowerCase();
+    if (!ALLOWED.includes(ext)) {
+      setErrorMsg(`Formato "${ext}" nao suportado. Use CSV, OFX ou PDF.`);
+      setStep("error");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMsg("Arquivo muito grande. Maximo 10MB.");
+      setStep("error");
+      return;
+    }
+
+    setStep("parsing");
+    setErrorMsg("");
+    try {
+      const result = await api.import.upload(file);
+      setBatchData(result);
+      // Selecionar todos que não são duplicatas
+      const ids = new Set(result.transactions.filter(t => t.status !== "duplicate").map(t => t.id));
+      setSelected(ids);
+      setStep("preview");
+    } catch (e) {
+      setErrorMsg(e.message || "Erro ao processar arquivo");
+      setStep("error");
+    }
+  };
+
+  const handleDrop = (e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); };
+  const handleFileInput = (e) => { const f = e.target.files?.[0]; if (f) handleFile(f); };
+
+  const toggleSelect = (id) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleAll = () => {
+    if (!batchData) return;
+    const nonDup = batchData.transactions.filter(t => t.status !== "duplicate").map(t => t.id);
+    setSelected(prev => prev.size === nonDup.length ? new Set() : new Set(nonDup));
+  };
+
+  const editTx = (id, field, value) => {
+    setEdits(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [field]: value } }));
+  };
+
+  const handleConfirm = async () => {
+    if (!batchData || selected.size === 0) return;
+    setStep("importing");
+    try {
+      const result = await api.import.confirm({
+        batch_id: batchData.batch_id,
+        selected_ids: Array.from(selected),
+        edits,
+      });
+      setImportResult(result);
+      setStep("done");
+      // Atualizar dados do app
+      if (refreshData) refreshData();
+    } catch (e) {
+      setErrorMsg(e.message || "Erro ao importar");
+      setStep("error");
+    }
+  };
+
+  const reset = () => { setStep("upload"); setBatchData(null); setSelected(new Set()); setEdits({}); setErrorMsg(""); setImportResult(null); };
+
+  const fmt = (v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 }).format(Number(v) || 0);
+  const fmtDate = (d) => d ? new Date(d).toLocaleDateString("pt-BR") : "-";
+  const confColor = (c) => c >= 0.7 ? "text-emerald-400" : c >= 0.4 ? "text-amber-400" : "text-red-400";
+
+  return (
+    <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div><h1 className="text-white text-xl sm:text-2xl font-bold">Importar Extratos</h1><p className="text-white/40 text-sm mt-1">Importe CSV, OFX ou PDF</p></div>
+        <div className="flex gap-2">
+          {step !== "upload" && step !== "parsing" && <Btn variant="secondary" onClick={reset}>Nova Importacao</Btn>}
+          <Btn variant="secondary" onClick={() => setShowHistory(!showHistory)}><Download className="w-4 h-4 inline mr-1" />Historico</Btn>
+        </div>
+      </div>
+
+      {/* STEP: Upload */}
+      {step === "upload" && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          className={`bg-[#111111] border-2 border-dashed rounded-xl p-8 sm:p-12 flex flex-col items-center justify-center transition-all cursor-pointer ${
+            dragOver ? "border-white/30 bg-white/[0.04]" : "border-white/[0.1]"
+          }`}
+          onClick={() => fileRef.current?.click()}
+          data-testid="import-dropzone"
+        >
+          <input ref={fileRef} type="file" accept=".csv,.ofx,.pdf" className="hidden" onChange={handleFileInput} />
+          <div className="w-16 h-16 bg-white/[0.04] rounded-xl flex items-center justify-center mb-4">
+            <Download className="w-8 h-8 text-white/30" />
+          </div>
+          <p className="text-white/60 text-sm font-medium mb-1">Arraste seu extrato aqui ou clique para selecionar</p>
+          <p className="text-white/30 text-xs mb-2">Formatos: CSV, OFX, PDF | Maximo 10MB</p>
+          <div className="flex gap-2 mt-2">
+            {["CSV", "OFX", "PDF"].map(f => (
+              <span key={f} className="text-[10px] px-2 py-1 rounded border border-white/[0.08] text-white/30">{f}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* STEP: Parsing */}
+      {step === "parsing" && (
+        <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-12 flex flex-col items-center justify-center">
+          <div className="w-10 h-10 border-2 border-white/20 border-t-white rounded-full animate-spin mb-4" />
+          <p className="text-white/60 text-sm">Processando arquivo...</p>
+          <p className="text-white/30 text-xs mt-1">Lendo, normalizando e categorizando</p>
+        </div>
+      )}
+
+      {/* STEP: Preview / Review */}
+      {step === "preview" && batchData && (
+        <div>
+          {/* Summary bar */}
+          <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-4 mb-4 flex flex-wrap items-center gap-4 sm:gap-6">
+            <div><p className="text-white/40 text-[10px] uppercase tracking-wider">Arquivo</p><p className="text-white text-sm font-medium">{batchData.file_name}</p></div>
+            <div><p className="text-white/40 text-[10px] uppercase tracking-wider">Total</p><p className="text-white text-sm font-medium">{batchData.total_rows}</p></div>
+            <div><p className="text-white/40 text-[10px] uppercase tracking-wider">Duplicatas</p><p className="text-amber-400 text-sm font-medium">{batchData.total_duplicates}</p></div>
+            <div><p className="text-white/40 text-[10px] uppercase tracking-wider">Selecionados</p><p className="text-emerald-400 text-sm font-medium">{selected.size}</p></div>
+            <div className="ml-auto flex gap-2">
+              <Btn variant="secondary" onClick={reset}>Cancelar</Btn>
+              <Btn onClick={handleConfirm} disabled={selected.size === 0}>Importar {selected.size} transacoes</Btn>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="bg-[#111111] border border-white/[0.06] rounded-xl overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/[0.06] text-white/40 text-xs">
+                  <th className="p-3 text-left w-10"><input type="checkbox" checked={selected.size === batchData.transactions.filter(t=>t.status!=="duplicate").length} onChange={toggleAll} className="accent-emerald-500" /></th>
+                  <th className="p-3 text-left">Data</th>
+                  <th className="p-3 text-left">Descricao</th>
+                  <th className="p-3 text-right">Valor</th>
+                  <th className="p-3 text-left">Tipo</th>
+                  <th className="p-3 text-left">Categoria</th>
+                  <th className="p-3 text-center">Conf.</th>
+                  <th className="p-3 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {batchData.transactions.map(tx => {
+                  const isDup = tx.status === "duplicate";
+                  const isSelected = selected.has(tx.id);
+                  const userEdit = edits[tx.id] || {};
+                  const dir = userEdit.direction || tx.direction;
+                  const cat = userEdit.category || tx.category;
+                  return (
+                    <tr key={tx.id} className={`border-b border-white/[0.03] ${isDup ? "opacity-40" : isSelected ? "bg-white/[0.02]" : ""}`}>
+                      <td className="p-3"><input type="checkbox" checked={isSelected} onChange={() => toggleSelect(tx.id)} disabled={isDup} className="accent-emerald-500" /></td>
+                      <td className="p-3 text-white/50 text-xs whitespace-nowrap">{fmtDate(tx.date)}</td>
+                      <td className="p-3 text-white text-xs max-w-[200px] truncate">{tx.description}</td>
+                      <td className={`p-3 text-right font-semibold text-xs whitespace-nowrap ${dir === "receita" ? "text-emerald-400" : "text-red-400"}`}>{dir === "receita" ? "+" : "-"}{fmt(tx.amount)}</td>
+                      <td className="p-3">
+                        <select value={dir} onChange={e => editTx(tx.id, "direction", e.target.value)} disabled={isDup} className="bg-transparent text-xs text-white/60 border-none outline-none cursor-pointer" style={{ colorScheme: "dark" }}>
+                          <option value="receita">Receita</option>
+                          <option value="despesa">Despesa</option>
+                        </select>
+                      </td>
+                      <td className="p-3">
+                        <input value={cat} onChange={e => editTx(tx.id, "category", e.target.value)} disabled={isDup} className="bg-transparent text-xs text-white/60 border-b border-white/[0.08] outline-none w-24 focus:border-white/30" />
+                      </td>
+                      <td className={`p-3 text-center text-xs font-medium ${confColor(tx.confidence)}`}>{Math.round(tx.confidence * 100)}%</td>
+                      <td className="p-3 text-center">
+                        {isDup ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">Duplicata</span>
+                          : tx.is_recurring ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400">Recorrente</span>
+                          : <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">OK</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* STEP: Importing */}
+      {step === "importing" && (
+        <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-12 flex flex-col items-center justify-center">
+          <div className="w-10 h-10 border-2 border-white/20 border-t-white rounded-full animate-spin mb-4" />
+          <p className="text-white/60 text-sm">Importando transacoes...</p>
+        </div>
+      )}
+
+      {/* STEP: Done */}
+      {step === "done" && importResult && (
+        <div className="bg-[#111111] border border-emerald-500/20 rounded-xl p-8 text-center">
+          <div className="w-14 h-14 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Check className="w-7 h-7 text-emerald-400" />
+          </div>
+          <h3 className="text-white text-lg font-bold mb-2">Importacao Concluida!</h3>
+          <p className="text-emerald-400 text-sm font-medium mb-1">{importResult.imported} transacoes importadas</p>
+          {importResult.errors > 0 && <p className="text-red-400 text-xs">{importResult.errors} erros</p>}
+          <p className="text-white/30 text-xs mt-3">Dashboard e relatorios atualizados automaticamente</p>
+          <Btn onClick={reset}><Plus className="w-4 h-4 inline mr-1" />Nova Importacao</Btn>
+        </div>
+      )}
+
+      {/* STEP: Error */}
+      {step === "error" && (
+        <div className="bg-[#111111] border border-red-500/20 rounded-xl p-8 text-center">
+          <div className="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <X className="w-7 h-7 text-red-400" />
+          </div>
+          <h3 className="text-white text-lg font-bold mb-2">Erro na Importacao</h3>
+          <p className="text-red-400 text-sm mb-4">{errorMsg}</p>
+          <Btn onClick={reset}>Tentar Novamente</Btn>
+        </div>
+      )}
+
+      {/* History */}
+      {showHistory && history.length > 0 && (
+        <div className="mt-6 bg-[#111111] border border-white/[0.06] rounded-xl p-5">
+          <h3 className="text-white font-medium mb-3">Historico de Importacoes</h3>
+          <div className="space-y-2">
+            {history.map(h => (
+              <div key={h.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg bg-white/[0.02]">
+                <div>
+                  <p className="text-white text-sm">{h.file_name}</p>
+                  <p className="text-white/30 text-xs">{fmtDate(h.created_at)} | {h.file_type}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-white/50 text-xs">{h.total_imported || h.total_normalized || 0} registros</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${h.status === "completed" ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"}`}>{h.status}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function SettingsSection() {

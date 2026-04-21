@@ -19,6 +19,7 @@ load_dotenv(ROOT_DIR / '.env')
 
 # Import routes
 from routes import auth, categories, tags, transactions, accounts, cards, investments, financings, budgets, goals
+from routes import imports as imports_route
 from routes.auth import get_current_user_id
 from models import User, UserSession
 from seed import seed_user_data
@@ -569,6 +570,25 @@ async def delete_goal(goal_id: str, request: Request):
 async def contribute_to_goal(goal_id: str, data: goals.GoalContributionCreate, request: Request):
     user_id = await get_current_user_id(request, db)
     return await goals.contribute_to_goal(goal_id, data, request, db=db, user_id=user_id)
+
+
+# ========== IMPORT ROUTES ==========
+from fastapi import UploadFile, File
+
+@app.post("/api/import/upload")
+async def import_upload(file: UploadFile = File(...), request: Request = None):
+    user_id = await get_current_user_id(request, db)
+    return await imports_route.upload_and_parse(file, request, db=db, user_id=user_id)
+
+@app.post("/api/import/confirm")
+async def import_confirm(request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await imports_route.confirm_import(request, db=db, user_id=user_id)
+
+@app.get("/api/import/history")
+async def import_history(request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await imports_route.get_import_history(request, db=db, user_id=user_id)
 
 
 @app.on_event("shutdown")

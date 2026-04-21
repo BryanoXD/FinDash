@@ -299,6 +299,30 @@ export const goalsAPI = {
     }),
 };
 
+// Import API
+const importAPI = {
+  upload: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}/api/import/upload`, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || `Upload failed: ${response.status}`);
+    }
+    return response.json();
+  },
+  confirm: (data) =>
+    apiCall('/api/import/confirm', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  history: () => apiCall('/api/import/history'),
+};
+
 // Export all APIs
 const api = {
   auth: authAPI,
@@ -311,6 +335,7 @@ const api = {
   financings: financingsAPI,
   budgets: budgetsAPI,
   goals: goalsAPI,
+  import: importAPI,
 };
 
 export default api;
