@@ -5,37 +5,78 @@
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL || '';
 
-// Helper to make API calls with credentials
-async function apiCall(endpoint, options = {}) {
+// Helper to make API calls with credentials.
+// Uses XMLHttpRequest (instead of fetch) because the preview environment
+// monkey-patches window.fetch and consumes error response bodies before the
+// app can read them, causing "body stream already read" and preventing the
+// real backend error message (e.g. "CSV vazio ou com apenas cabecalho")
+// from reaching the UI.
+function apiCall(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
-  
-  let response;
-  try {
-    response = await fetch(url, {
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      ...options,
-    });
-  } catch (networkError) {
-    throw new Error(`Erro de rede: nao foi possivel conectar ao servidor. Verifique sua conexao.`);
-  }
-  
-  if (response.status === 401) {
-    throw new Error('Sessao expirada. Faca login novamente.');
-  }
-  
-  if (!response.ok) {
-    let detail = `Erro ${response.status}`;
-    try {
-      const errBody = await response.json();
-      if (errBody.detail) detail = errBody.detail;
-    } catch (_) {
-      try { detail = await response.text(); } catch (_2) { /* ignore */ }
+  const method = (options.method || 'GET').toUpperCase();
+  const body = options.body || null;
+  const userHeaders = options.headers || {};
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url, true);
+    xhr.withCredentials = true;
+
+    // Default Content-Type for JSON bodies
+    const headers = { ...userHeaders };
+    if (body && !Object.keys(headers).some(k => k.toLowerCase() === 'content-type')) {
+      headers['Content-Type'] = 'application/json';
     }
-    throw new Error(detail);
-  }
-  
-  return response.json();
+    Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+
+    xhr.onload = () => {
+      const status = xhr.status;
+      const text = xhr.responseText || '';
+
+      if (status === 401) {
+        return reject(new Error('Sessao expirada. Faca login novamente.'));
+      }
+
+      if (status < 200 || status >= 300) {
+        let detail = `Erro ${status}`;
+        if (text) {
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed && parsed.detail) {
+              detail = typeof parsed.detail === 'string'
+                ? parsed.detail
+                : JSON.stringify(parsed.detail);
+            } else if (parsed && parsed.message) {
+              detail = parsed.message;
+            } else {
+              detail = text.length < 300 ? text : detail;
+            }
+          } catch (_parseErr) {
+            // Not JSON - use raw text if short and meaningful
+            const trimmed = text.trim();
+            if (trimmed && trimmed.length < 300 && !trimmed.startsWith('<')) {
+              detail = trimmed;
+            }
+          }
+        }
+        return reject(new Error(detail));
+      }
+
+      // Success: parse JSON body
+      if (!text) return resolve(null);
+      try {
+        resolve(JSON.parse(text));
+      } catch (parseErr) {
+        reject(new Error('Resposta invalida do servidor (JSON malformado)'));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Erro de rede: nao foi possivel conectar ao servidor. Verifique sua conexao.'));
+    xhr.ontimeout = () => reject(new Error('Tempo esgotado ao processar a requisicao.'));
+    xhr.onabort = () => reject(new Error('Requisicao cancelada.'));
+
+    xhr.send(body);
+  });
 }
 
 // ============== AUTH ==============

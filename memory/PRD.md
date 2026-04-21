@@ -38,6 +38,19 @@ frontend/
 - Mensagens de erro descritivas: "Formato nao suportado", "Arquivo vazio", "Arquivo muito grande", "Sessao expirada", erros de rede
 - Lint: limpo em todos os arquivos editados
 
+### FIX (21/04/2026) - "Erro 400" Generico na UI
+- **Causa raiz**: O script de dev do Emergent (`assets.emergent.sh/scripts/emergent-main.js`)
+  faz monkey-patch de `window.fetch` e **consome o body de responses 4xx/5xx** antes
+  que o codigo da app consiga ler. Resultado: `response.json()` falhava com
+  "body stream already read", o `detail` nao era extraido e a UI mostrava "Erro 400".
+- **Correcao**: Substituido `fetch` por `XMLHttpRequest` em `apiCall` (api.js:9-74).
+  XHR nao e interceptado pelo script de dev, permitindo ler o body de qualquer status
+  (200, 400, 401, 500) e extrair corretamente o campo `detail` do JSON de erro.
+- **Validado no app real**: `CSV vazio` -> "CSV vazio ou com apenas cabecalho",
+  PDF sem texto -> "PDF nao contem texto extraivel", OFX invalido ->
+  "Erro ao interpretar arquivo OFX: The ofx file is empty!", CSV/OFX validos ->
+  preview com tabela correta.
+
 ## P2
 1. Feedback loop de auto-categorizacao (salvar correcoes do usuario para melhorar sugestoes futuras)
 2. Fluxo de Caixa PDF
