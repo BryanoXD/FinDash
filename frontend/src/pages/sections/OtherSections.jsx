@@ -465,149 +465,38 @@ export function HeatmapSection() {
 }
 
 export function ReportsSection() {
-  const { user, transactions, categories, accounts, cards, investments, financings } = useData();
+  const data = useData();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
-  const [generating, setGenerating] = useState(false);
+  const [status, setStatus] = useState(null); // null | 'loading' | 'success' | 'error'
+  const [message, setMessage] = useState("");
   const months = ["Janeiro","Fevereiro","Marco","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
-  const generateMonthlyPDF = async () => {
-    setGenerating(true);
+  const handleDownload = async () => {
+    setStatus("loading");
+    setMessage("");
     try {
-      const { default: jsPDF } = await import('jspdf');
-      await import('jspdf-autotable');
-      const doc = new jsPDF();
-      const fmtBRL = (v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 }).format(Number(v) || 0);
-      const period = `${months[month]} ${year}`;
-      const prefix = `${year}-${String(month + 1).padStart(2, "0")}`;
-      const txMonth = transactions.filter(t => t.data && t.data.startsWith(prefix));
-      const receitas = txMonth.filter(t => t.tipo === "receita");
-      const despesas = txMonth.filter(t => t.tipo === "despesa");
-      const totalRec = receitas.reduce((s, t) => s + t.valor, 0);
-      const totalDesp = despesas.reduce((s, t) => s + t.valor, 0);
-      const saldo = totalRec - totalDesp;
-      let y = 15;
-
-      // Header
-      doc.setFillColor(10, 10, 10);
-      doc.rect(0, 0, 210, 40, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(20);
-      doc.setFont("helvetica", "bold");
-      doc.text("FinDash - Relatorio Mensal", 14, y + 8);
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "normal");
-      doc.text(period, 14, y + 16);
-      doc.setFontSize(8);
-      doc.setTextColor(180, 180, 180);
-      doc.text(`Gerado em ${new Date().toLocaleDateString("pt-BR")} | ${user?.name || ""}`, 14, y + 23);
-      y = 48;
-
-      // Summary cards
-      doc.setTextColor(40, 40, 40);
-      doc.setFontSize(13);
-      doc.setFont("helvetica", "bold");
-      doc.text("Resumo Financeiro", 14, y);
-      y += 8;
-      const summaryData = [
-        ["Receitas", fmtBRL(totalRec)],
-        ["Despesas", fmtBRL(totalDesp)],
-        ["Saldo", fmtBRL(saldo)],
-      ];
-      doc.autoTable({
-        startY: y, head: [["", "Valor"]], body: summaryData,
-        theme: "grid", styles: { fontSize: 10, cellPadding: 4 },
-        headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255] },
-        columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
-        margin: { left: 14, right: 14 },
-      });
-      y = doc.lastAutoTable.finalY + 12;
-
-      // Despesas by category
-      const catMap = {};
-      despesas.forEach(t => { const c = t.categoria || "Outros"; catMap[c] = (catMap[c] || 0) + t.valor; });
-      const catRows = Object.entries(catMap).sort((a, b) => b[1] - a[1]).map(([cat, val]) => {
-        const pct = totalDesp > 0 ? ((val / totalDesp) * 100).toFixed(1) + "%" : "0%";
-        return [cat, fmtBRL(val), pct];
-      });
-      if (catRows.length > 0) {
-        doc.setFontSize(13);
-        doc.setFont("helvetica", "bold");
-        doc.text("Despesas por Categoria", 14, y);
-        y += 6;
-        doc.autoTable({
-          startY: y, head: [["Categoria", "Valor", "%"]], body: catRows,
-          theme: "grid", styles: { fontSize: 9, cellPadding: 3 },
-          headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255] },
-          columnStyles: { 1: { halign: "right" }, 2: { halign: "center" } },
-          margin: { left: 14, right: 14 },
-        });
-        y = doc.lastAutoTable.finalY + 12;
+      const { generateAndDownloadReport } = await import("../../services/reportGenerator");
+      const result = await generateAndDownloadReport(data, month, year);
+      if (result.success) {
+        setStatus("success");
+        setMessage(result.message);
+      } else {
+        setStatus("error");
+        setMessage(result.message);
       }
-
-      // Transactions table
-      if (txMonth.length > 0) {
-        if (y > 240) { doc.addPage(); y = 15; }
-        doc.setFontSize(13);
-        doc.setFont("helvetica", "bold");
-        doc.text("Transacoes do Periodo", 14, y);
-        y += 6;
-        const txRows = txMonth.sort((a, b) => a.data.localeCompare(b.data)).map(t => [
-          t.data ? new Date(t.data).toLocaleDateString("pt-BR") : "",
-          t.descricao?.substring(0, 30) || "",
-          t.categoria || "",
-          t.tipo === "receita" ? fmtBRL(t.valor) : "",
-          t.tipo === "despesa" ? fmtBRL(t.valor) : "",
-          t.pago ? "Pago" : "Pendente",
-        ]);
-        doc.autoTable({
-          startY: y, head: [["Data", "Descricao", "Categoria", "Receita", "Despesa", "Status"]], body: txRows,
-          theme: "grid", styles: { fontSize: 8, cellPadding: 2.5 },
-          headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255], fontSize: 8 },
-          columnStyles: { 3: { halign: "right" }, 4: { halign: "right" } },
-          margin: { left: 14, right: 14 },
-        });
-        y = doc.lastAutoTable.finalY + 12;
-      }
-
-      // Accounts summary
-      if (accounts.length > 0) {
-        if (y > 250) { doc.addPage(); y = 15; }
-        doc.setFontSize(13);
-        doc.setFont("helvetica", "bold");
-        doc.text("Contas Bancarias", 14, y);
-        y += 6;
-        const accRows = accounts.map(a => [a.nome, a.tipo, fmtBRL(a.saldo)]);
-        doc.autoTable({
-          startY: y, head: [["Conta", "Tipo", "Saldo"]], body: accRows,
-          theme: "grid", styles: { fontSize: 9, cellPadding: 3 },
-          headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255] },
-          columnStyles: { 2: { halign: "right" } },
-          margin: { left: 14, right: 14 },
-        });
-      }
-
-      // Footer
-      const pageCount = doc.internal.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(7);
-        doc.setTextColor(150, 150, 150);
-        doc.text(`FinDash | ${period} | Pagina ${i}/${pageCount}`, 105, 290, { align: "center" });
-      }
-
-      doc.save(`FinDash_Relatorio_${months[month]}_${year}.pdf`);
     } catch (e) {
-      console.error("PDF generation error:", e);
-    } finally {
-      setGenerating(false);
+      setStatus("error");
+      setMessage("Falha ao gerar o relatorio: " + e.message);
     }
+    // Limpar mensagem após 4s
+    setTimeout(() => { setStatus(null); setMessage(""); }, 4000);
   };
 
   return (
     <div>
-      <div className="mb-6"><h1 className="text-white text-xl sm:text-2xl font-bold">Relatorios</h1><p className="text-white/40 text-sm mt-1">Exporte seus dados</p></div>
+      <div className="mb-6"><h1 className="text-white text-xl sm:text-2xl font-bold">Relatorios</h1><p className="text-white/40 text-sm mt-1">Exporte seus dados financeiros</p></div>
       
       {/* Period selector */}
       <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-5 mb-6">
@@ -631,28 +520,42 @@ export function ReportsSection() {
         </div>
       </div>
       
-      {/* Report card */}
+      {/* Status message */}
+      {message && (
+        <div className={`mb-4 px-4 py-3 rounded-lg text-sm ${status === "success" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}>
+          {message}
+        </div>
+      )}
+      
+      {/* Report cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Relatório Mensal - ATIVO */}
         <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] transition-all">
           <div className="w-10 h-10 bg-white/[0.06] rounded-lg flex items-center justify-center mb-4"><Calendar className="w-5 h-5 text-white/50" /></div>
           <h3 className="text-white font-medium mb-1">Relatorio Mensal</h3>
-          <p className="text-white/30 text-sm">Resumo completo com receitas, despesas, categorias e transacoes</p>
+          <p className="text-white/30 text-sm">Resumo completo com receitas, despesas, categorias, metas, contas e indicadores</p>
           <p className="text-white/20 text-xs mt-2">{months[month]} {year}</p>
           <button
-            onClick={generateMonthlyPDF}
-            disabled={generating}
-            className="mt-4 text-white/70 text-sm flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/10 transition-colors disabled:opacity-50"
+            onClick={handleDownload}
+            disabled={status === "loading"}
+            className="mt-4 text-white/70 text-sm flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-white/[0.06] hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="export-pdf-btn"
           >
-            <Download className="w-4 h-4" /> {generating ? "Gerando..." : "Baixar PDF"}
+            {status === "loading" ? (
+              <><div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> Gerando...</>
+            ) : (
+              <><Download className="w-4 h-4" /> Baixar PDF</>
+            )}
           </button>
         </div>
+        {/* Fluxo de Caixa - EM BREVE */}
         <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-5 opacity-50">
           <div className="w-10 h-10 bg-white/[0.06] rounded-lg flex items-center justify-center mb-4"><BarChart3 className="w-5 h-5 text-white/50" /></div>
           <h3 className="text-white font-medium mb-1">Fluxo de Caixa</h3>
           <p className="text-white/30 text-sm">Entradas e saidas detalhadas</p>
           <p className="text-white/20 text-xs mt-4">Em breve</p>
         </div>
+        {/* Análise de Gastos - EM BREVE */}
         <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-5 opacity-50">
           <div className="w-10 h-10 bg-white/[0.06] rounded-lg flex items-center justify-center mb-4"><PieChart className="w-5 h-5 text-white/50" /></div>
           <h3 className="text-white font-medium mb-1">Analise de Gastos</h3>
