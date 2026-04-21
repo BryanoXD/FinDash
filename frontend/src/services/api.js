@@ -9,22 +9,30 @@ const API_BASE = process.env.REACT_APP_BACKEND_URL || '';
 async function apiCall(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
   
-  const defaultOptions = {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  };
-
-  const response = await fetch(url, { ...defaultOptions, ...options });
+  let response;
+  try {
+    response = await fetch(url, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+  } catch (networkError) {
+    throw new Error(`Erro de rede: nao foi possivel conectar ao servidor. Verifique sua conexao.`);
+  }
   
   if (response.status === 401) {
-    throw new Error('Unauthorized');
+    throw new Error('Sessao expirada. Faca login novamente.');
   }
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(error.detail || 'Request failed');
+    let detail = `Erro ${response.status}`;
+    try {
+      const errBody = await response.json();
+      if (errBody.detail) detail = errBody.detail;
+    } catch (_) {
+      try { detail = await response.text(); } catch (_2) { /* ignore */ }
+    }
+    throw new Error(detail);
   }
   
   return response.json();
@@ -302,14 +310,34 @@ export const goalsAPI = {
 // Import API
 const importAPI = {
   upload: async (file) => {
-    // Convert file to base64 (bypasses proxy multipart issues)
-    const toBase64 = (f) => new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(f);
-    });
-    const fileBase64 = await toBase64(file);
+    if (!file) throw new Error('Nenhum arquivo selecionado');
+    if (file.size === 0) throw new Error('Arquivo vazio');
+    if (file.size > 10 * 1024 * 1024) throw new Error('Arquivo muito grande. Maximo 10MB.');
+    
+    // Validate extension
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!['csv', 'ofx', 'pdf'].includes(ext)) {
+      throw new Error(`Formato .${ext} nao suportado. Use CSV, OFX ou PDF.`);
+    }
+    
+    // Convert to base64
+    let fileBase64;
+    try {
+      fileBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          const base64 = result.split(',')[1];
+          if (!base64) reject(new Error('Falha ao converter arquivo para base64'));
+          else resolve(base64);
+        };
+        reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
+        reader.readAsDataURL(file);
+      });
+    } catch (e) {
+      throw new Error(`Erro ao ler arquivo: ${e.message}`);
+    }
+    
     return apiCall('/api/import/upload', {
       method: 'POST',
       body: JSON.stringify({ file_base64: fileBase64, filename: file.name }),
