@@ -34,6 +34,7 @@ class Orcamento(BaseModel):
     id: str = Field(default_factory=lambda: generate_id("orc_"))
     titulo: str
     items: List[OrcamentoItem] = []
+    categoria_id: Optional[str] = None  # link to category for "planejado vs realizado"
 
 
 class ListaCompraItem(BaseModel):

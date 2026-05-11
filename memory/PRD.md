@@ -63,6 +63,10 @@ frontend/
 3. Analise de Gastos PDF
 4. Heatmap com dados reais
 
-## P3
+## P3 (Completed)
+- (11/05/2026) Markdown preview com `react-markdown` (toggle Editar/Lado a lado/Visualizar)
+- (11/05/2026) Orcamento vinculado a categoria - mostra "Realizado mes atual" com barra de progresso (verde <100%, vermelho >100%)
+
+## P3 (Remaining)
 - Multi-idioma, Tema claro/escuro, PWA mobile
 - Refatorar OtherSections.jsx (quebrar ImportSection e ReportsSection em arquivos proprios)

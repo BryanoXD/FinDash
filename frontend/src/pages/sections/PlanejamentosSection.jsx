@@ -9,9 +9,10 @@
  * Dialog from shadcn, useData() for state, fmt from formatters.
  */
 import React, { useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { useData } from "../../context/DataContext";
 import { fmt } from "../../lib/formatters";
-import { Field, Inp, MoneyInp, Btn, Toggle } from "../../components/shared/FormComponents";
+import { Field, Inp, MoneyInp, Sel, Btn, Toggle } from "../../components/shared/FormComponents";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "../../components/ui/dialog";
@@ -156,7 +157,7 @@ function PlanList({ onOpen }) {
 }
 
 // ============== ORCAMENTO MODAL ==============
-function OrcamentoModal({ open, initial, onClose, onSave }) {
+function OrcamentoModal({ open, initial, categories, gastoRealizado, onClose, onSave }) {
   const [form, setForm] = useState(initial);
   React.useEffect(() => { setForm(initial); }, [initial]);
 
@@ -175,6 +176,9 @@ function OrcamentoModal({ open, initial, onClose, onSave }) {
   const addItem = () => setForm({ ...form, items: [...(form.items || []), { nome: "", valor: 0, quantidade: 1 }] });
 
   const total = orcTotal(form);
+  const realizado = gastoRealizado || 0;
+  const pct = total > 0 ? Math.min((realizado / total) * 100, 999) : 0;
+  const pctOver100 = pct > 100;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -190,6 +194,19 @@ function OrcamentoModal({ open, initial, onClose, onSave }) {
               value={form.titulo}
               onChange={(e) => setForm({ ...form, titulo: e.target.value })}
             />
+          </Field>
+
+          <Field label="Categoria vinculada (opcional)">
+            <Sel
+              data-testid="orc-form-categoria"
+              value={form.categoria_id || ""}
+              onChange={(e) => setForm({ ...form, categoria_id: e.target.value || null })}
+            >
+              <option value="">Sem categoria - nao acompanha gastos reais</option>
+              {(categories || []).filter(c => c.tipo === "despesa" || c.tipo === "ambos").map(c => (
+                <option key={c.id} value={c.id}>{c.nome}</option>
+              ))}
+            </Sel>
           </Field>
 
           <div>
@@ -229,9 +246,27 @@ function OrcamentoModal({ open, initial, onClose, onSave }) {
             </div>
           </div>
 
-          <div className="bg-white/[0.04] rounded-lg p-3 flex items-center justify-between">
-            <span className="text-white/60 text-sm">Total do orcamento</span>
-            <span className="text-white text-base font-semibold">{fmt(total)}</span>
+          <div className="bg-white/[0.04] rounded-lg p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-white/60 text-sm">Total planejado</span>
+              <span className="text-white text-base font-semibold">{fmt(total)}</span>
+            </div>
+            {form.categoria_id && (
+              <>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-white/40">Realizado (mes atual)</span>
+                  <span className={pctOver100 ? "text-red-400" : "text-emerald-400"}>
+                    {fmt(realizado)} ({pct.toFixed(0)}%)
+                  </span>
+                </div>
+                <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${pctOver100 ? "bg-red-400" : "bg-emerald-400"}`}
+                    style={{ width: `${Math.min(pct, 100)}%` }}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
         <DialogFooter className="gap-2">
@@ -252,16 +287,40 @@ function OrcamentoModal({ open, initial, onClose, onSave }) {
 // ============== DETAIL VIEW (tabs) ==============
 function PlanDetail({ planId, onBack }) {
   const {
-    planejamentos, updatePlanejamento, deletePlanejamento, deletePlanGoal,
+    planejamentos, categories, transactions,
+    updatePlanejamento, deletePlanejamento, deletePlanGoal,
   } = useData();
   const plan = useMemo(() => planejamentos.find((p) => p.id === planId), [planejamentos, planId]);
   const [tab, setTab] = useState("notas");
+  const [mdMode, setMdMode] = useState("edit"); // edit | preview | split
   const [draft, setDraft] = useState("");
   const [draftTitulo, setDraftTitulo] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
   const [orcModal, setOrcModal] = useState(null);
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteWithGoals, setDeleteWithGoals] = useState(false);
+
+  // Compute realized spend per category for the CURRENT month
+  const gastoPorCategoria = useMemo(() => {
+    const map = {};
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    (transactions || []).forEach((tx) => {
+      if (tx.tipo !== "despesa" || !tx.categoria_id) return;
+      const d = new Date(tx.data);
+      if (d.getFullYear() === y && d.getMonth() === m) {
+        map[tx.categoria_id] = (map[tx.categoria_id] || 0) + (Number(tx.valor) || 0);
+      }
+    });
+    return map;
+  }, [transactions]);
+
+  const catNameById = useMemo(() => {
+    const m = {};
+    (categories || []).forEach((c) => { m[c.id] = c.nome; });
+    return m;
+  }, [categories]);
 
   React.useEffect(() => {
     if (plan) {
@@ -508,17 +567,82 @@ function PlanDetail({ planId, onBack }) {
       {/* ===== TAB: NOTAS ===== */}
       {tab === "notas" && (
         <div className="space-y-3">
-          <p className="text-white/40 text-xs">
-            Escreva em Markdown - titulos com #, listas com -, negrito com **texto**. O conteudo e salvo automaticamente ao sair do campo.
-          </p>
-          <textarea
-            data-testid="plan-md-editor"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={saveNotes}
-            placeholder={`# ${plan.titulo}\n\n## Visao geral\n- Item 1\n- Item 2\n\n## Detalhes\nDescreva aqui...`}
-            className="w-full min-h-[400px] bg-[#0f0f0f] border border-white/[0.06] rounded-lg p-4 text-white text-sm font-mono focus:outline-none focus:border-white/20 leading-relaxed"
-          />
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-white/40 text-xs">
+              Markdown: titulos com #, listas com -, negrito com **texto**. Salva automaticamente ao sair do campo.
+            </p>
+            <div className="flex gap-1 bg-[#0f0f0f] border border-white/[0.06] rounded-md p-0.5">
+              {[
+                { id: "edit", label: "Editar" },
+                { id: "split", label: "Lado a lado" },
+                { id: "preview", label: "Visualizar" },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  data-testid={`md-mode-${m.id}`}
+                  onClick={() => setMdMode(m.id)}
+                  className={`px-2.5 py-1 rounded text-[11px] transition-colors ${
+                    mdMode === m.id ? "bg-white/10 text-white" : "text-white/50 hover:text-white/80"
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className={`grid gap-3 ${mdMode === "split" ? "md:grid-cols-2" : "grid-cols-1"}`}>
+            {mdMode !== "preview" && (
+              <textarea
+                data-testid="plan-md-editor"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={saveNotes}
+                placeholder={`# ${plan.titulo}\n\n## Visao geral\n- Item 1\n- Item 2\n\n## Detalhes\nDescreva aqui...`}
+                className="w-full min-h-[400px] bg-[#0f0f0f] border border-white/[0.06] rounded-lg p-4 text-white text-sm font-mono focus:outline-none focus:border-white/20 leading-relaxed"
+              />
+            )}
+            {mdMode !== "edit" && (
+              <div
+                data-testid="plan-md-preview"
+                className="min-h-[400px] bg-[#0f0f0f] border border-white/[0.06] rounded-lg p-4 overflow-auto text-sm text-white/80 leading-relaxed markdown-preview"
+              >
+                {draft.trim() ? (
+                  <ReactMarkdown
+                    components={{
+                      h1: ({ node, ...p }) => <h1 className="text-white text-xl font-bold mt-3 mb-2" {...p} />,
+                      h2: ({ node, ...p }) => <h2 className="text-white text-lg font-semibold mt-3 mb-2" {...p} />,
+                      h3: ({ node, ...p }) => <h3 className="text-white text-base font-semibold mt-2 mb-1.5" {...p} />,
+                      p: ({ node, ...p }) => <p className="my-2" {...p} />,
+                      ul: ({ node, ...p }) => <ul className="list-disc pl-5 my-2 space-y-1" {...p} />,
+                      ol: ({ node, ...p }) => <ol className="list-decimal pl-5 my-2 space-y-1" {...p} />,
+                      li: ({ node, ...p }) => <li className="text-white/80" {...p} />,
+                      strong: ({ node, ...p }) => <strong className="text-white font-semibold" {...p} />,
+                      em: ({ node, ...p }) => <em className="text-white/90 italic" {...p} />,
+                      a: ({ node, ...p }) => <a className="text-indigo-400 hover:text-indigo-300 underline" target="_blank" rel="noopener noreferrer" {...p} />,
+                      code: ({ node, inline, ...p }) =>
+                        inline ? (
+                          <code className="text-emerald-300 bg-white/[0.06] px-1 py-0.5 rounded text-xs" {...p} />
+                        ) : (
+                          <code className="block text-emerald-300 bg-white/[0.04] p-3 rounded my-2 overflow-x-auto text-xs font-mono" {...p} />
+                        ),
+                      blockquote: ({ node, ...p }) => (
+                        <blockquote className="border-l-2 border-white/20 pl-3 text-white/60 italic my-2" {...p} />
+                      ),
+                      hr: () => <hr className="border-white/10 my-3" />,
+                      table: ({ node, ...p }) => <table className="border border-white/10 my-2 text-xs" {...p} />,
+                      th: ({ node, ...p }) => <th className="border border-white/10 px-2 py-1 bg-white/[0.04] text-white" {...p} />,
+                      td: ({ node, ...p }) => <td className="border border-white/10 px-2 py-1 text-white/70" {...p} />,
+                    }}
+                  >
+                    {draft}
+                  </ReactMarkdown>
+                ) : (
+                  <p className="text-white/30 text-sm italic">Nada para visualizar ainda</p>
+                )}
+              </div>
+            )}
+          </div>
           {savingNotes && <p className="text-white/40 text-xs">Salvando...</p>}
         </div>
       )}
@@ -540,12 +664,20 @@ function PlanDetail({ planId, onBack }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {(plan.orcamentos || []).map((orc) => {
                 const total = orcTotal(orc);
+                const realizado = orc.categoria_id ? (gastoPorCategoria[orc.categoria_id] || 0) : null;
+                const pct = realizado !== null && total > 0 ? (realizado / total) * 100 : 0;
+                const pctOver = pct > 100;
                 return (
                   <div key={orc.id} className="bg-[#111111] border border-white/[0.06] rounded-xl p-5">
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <p className="text-white font-medium text-sm">{orc.titulo}</p>
-                        <p className="text-white/40 text-xs">{(orc.items || []).length} itens</p>
+                        <p className="text-white/40 text-xs">
+                          {(orc.items || []).length} itens
+                          {orc.categoria_id && catNameById[orc.categoria_id] && (
+                            <> . <span className="text-white/60">{catNameById[orc.categoria_id]}</span></>
+                          )}
+                        </p>
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => setOrcModal(orc)} className="text-white/40 hover:text-white/80">
@@ -557,9 +689,25 @@ function PlanDetail({ planId, onBack }) {
                       </div>
                     </div>
                     <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between">
-                      <span className="text-white/40 text-xs">Total</span>
+                      <span className="text-white/40 text-xs">Planejado</span>
                       <span className="text-white font-semibold">{fmt(total)}</span>
                     </div>
+                    {realizado !== null && (
+                      <div className="mt-2 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-white/40">Realizado (mes atual)</span>
+                          <span className={pctOver ? "text-red-400" : "text-emerald-400"}>
+                            {fmt(realizado)} ({pct.toFixed(0)}%)
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${pctOver ? "bg-red-400" : "bg-emerald-400"}`}
+                            style={{ width: `${Math.min(pct, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -568,6 +716,8 @@ function PlanDetail({ planId, onBack }) {
           <OrcamentoModal
             open={!!orcModal}
             initial={orcModal}
+            categories={categories || []}
+            gastoRealizado={orcModal?.categoria_id ? (gastoPorCategoria[orcModal.categoria_id] || 0) : 0}
             onClose={() => setOrcModal(null)}
             onSave={saveOrcamento}
           />
