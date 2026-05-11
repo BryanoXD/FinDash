@@ -8,15 +8,254 @@ import {
   Target, Shield, ArrowRight, X, Minus,
 } from "lucide-react";
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer,
+  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ReferenceLine, ReferenceDot, ResponsiveContainer,
 } from "recharts";
 import { TransactionModal } from "./OtherSections";
+import { Toggle } from "../../components/shared/FormComponents";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 
 const iconMap = { Briefcase, Home, ShoppingCart, Tv, Car, Heart, GraduationCap, TrendingUp, ArrowDownLeft, Palette: Briefcase, Target, Shield, DollarSign };
 
 const TIME_PERIODS = ["7d", "1m", "3m", "6m", "1y", "5y", "10y", "25y"];
+
+/**
+ * Build cumulative daily series for a given month.
+ * Returns array of 31 entries: [{ dia: 1, valor: cum|null, daily: dailyValue }]
+ * Days beyond the actual month length get null. For current month, days after today
+ * also get null so the line stops naturally.
+ */
+function buildMonthSeries(transactions, year, month, tipo, capToToday = false) {
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+  const isCurrent = today.getFullYear() === year && today.getMonth() === month;
+  const cutoff = capToToday && isCurrent ? today.getDate() : lastDay;
+
+  const dailyTotals = new Array(31).fill(0);
+  transactions.forEach((tx) => {
+    if (tx.tipo !== tipo) return;
+    const d = new Date(tx.data);
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      const dia = d.getDate();
+      if (dia >= 1 && dia <= 31) {
+        dailyTotals[dia - 1] += Number(tx.valor) || 0;
+      }
+    }
+  });
+
+  let acc = 0;
+  const series = [];
+  for (let i = 0; i < 31; i++) {
+    const dia = i + 1;
+    if (dia > lastDay) {
+      series.push({ dia, valor: null, daily: 0 });
+      continue;
+    }
+    acc += dailyTotals[i];
+    if (capToToday && dia > cutoff) {
+      series.push({ dia, valor: null, daily: 0 });
+    } else {
+      series.push({ dia, valor: Math.round(acc * 100) / 100, daily: dailyTotals[i] });
+    }
+  }
+  return series;
+}
+
+function RitmoChart({ transactions }) {
+  const [showReceitas, setShowReceitas] = useState(false);
+  const tipo = showReceitas ? "receita" : "despesa";
+
+  const data = useMemo(() => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth();
+    const prev = new Date(curYear, curMonth - 1, 1);
+    const prevYear = prev.getFullYear();
+    const prevMonth = prev.getMonth();
+
+    const atualSeries = buildMonthSeries(transactions, curYear, curMonth, tipo, true);
+    const anteriorSeries = buildMonthSeries(transactions, prevYear, prevMonth, tipo, false);
+
+    // Merge into shape Recharts expects
+    const merged = atualSeries.map((a, i) => ({
+      dia: a.dia,
+      atual: a.valor,
+      anterior: anteriorSeries[i].valor,
+      dailyAtual: a.daily,
+    }));
+
+    // Find peak daily spend day in current month (with non-zero value)
+    let peakDay = null;
+    let peakValue = 0;
+    atualSeries.forEach((d) => {
+      if (d.daily > peakValue) {
+        peakValue = d.daily;
+        peakDay = d.dia;
+      }
+    });
+
+    // Find last valid cumulative point in current month (for "ponto final")
+    let lastDay = null;
+    let lastValue = 0;
+    for (let i = atualSeries.length - 1; i >= 0; i--) {
+      if (atualSeries[i].valor !== null && atualSeries[i].valor > 0) {
+        lastDay = atualSeries[i].dia;
+        lastValue = atualSeries[i].valor;
+        break;
+      }
+    }
+
+    // Cumulative value at the peak day (for placing the highlight on the line)
+    const peakCumulative = peakDay
+      ? merged.find((d) => d.dia === peakDay)?.atual
+      : null;
+
+    return { merged, peakDay, peakValue, peakCumulative, lastDay, lastValue };
+  }, [transactions, tipo]);
+
+  const config = showReceitas
+    ? { color: "#22c55e", label: "Ritmo de receitas", peakLabel: "Maior receita do dia" }
+    : { color: "#ef4444", label: "Ritmo de gastos", peakLabel: "Maior gasto do dia" };
+
+  const hasData = data.merged.some((d) => d.atual !== null && d.atual > 0) ||
+    data.merged.some((d) => d.anterior !== null && d.anterior > 0);
+
+  return (
+    <div data-testid="ritmo-chart" className="bg-[#111111] border border-white/[0.06] rounded-xl p-4 sm:p-5 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div>
+          <h3 className="text-white font-semibold text-sm sm:text-base">{config.label}</h3>
+          <p className="text-white/40 text-xs mt-0.5">
+            Acumulado dia a dia: mes atual vs mes anterior
+          </p>
+        </div>
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-0.5" style={{ backgroundColor: config.color }} />
+              <span className="text-white/50">Mes atual</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-0.5 border-t border-dashed border-white/40" />
+              <span className="text-white/50">Mes anterior</span>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer" data-testid="ritmo-toggle-wrapper">
+            <span className={`text-xs ${!showReceitas ? "text-white" : "text-white/40"}`}>Gastos</span>
+            <Toggle on={showReceitas} onChange={() => setShowReceitas((v) => !v)} />
+            <span className={`text-xs ${showReceitas ? "text-white" : "text-white/40"}`}>Receitas</span>
+          </label>
+        </div>
+      </div>
+
+      {!hasData ? (
+        <div className="h-48 sm:h-64 flex items-center justify-center">
+          <p className="text-white/40 text-sm">Sem dados suficientes para os ultimos 2 meses</p>
+        </div>
+      ) : (
+        <div className="h-48 sm:h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data.merged} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <XAxis
+                dataKey="dia"
+                type="number"
+                domain={[1, 31]}
+                ticks={[1, 5, 10, 15, 20, 25, 31]}
+                tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 12 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 12 }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={fmtCompact}
+              />
+              <Tooltip
+                contentStyle={{ backgroundColor: "#1a1a1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px" }}
+                labelStyle={{ color: "#fff" }}
+                labelFormatter={(dia) => `Dia ${dia}`}
+                formatter={(value, name) => [
+                  value === null ? "-" : fmt(value),
+                  name === "atual" ? "Mes atual" : "Mes anterior",
+                ]}
+              />
+              <ReferenceLine
+                x={31}
+                stroke="rgba(255,255,255,0.18)"
+                strokeDasharray="4 4"
+                label={{ value: "Fim do mes", fill: "rgba(255,255,255,0.4)", fontSize: 10, position: "insideTopRight" }}
+              />
+              <Line
+                type="monotone"
+                dataKey="anterior"
+                stroke="rgba(255,255,255,0.35)"
+                strokeWidth={1.5}
+                strokeDasharray="5 5"
+                dot={false}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="atual"
+                stroke={config.color}
+                strokeWidth={2.5}
+                dot={false}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+              {data.lastDay && data.lastValue > 0 && (
+                <ReferenceDot
+                  x={data.lastDay}
+                  y={data.lastValue}
+                  r={5}
+                  fill={config.color}
+                  stroke="#fff"
+                  strokeWidth={1.5}
+                  ifOverflow="extendDomain"
+                />
+              )}
+              {data.peakDay && data.peakCumulative !== null && data.peakCumulative > 0 && data.peakDay !== data.lastDay && (
+                <ReferenceDot
+                  x={data.peakDay}
+                  y={data.peakCumulative}
+                  r={5}
+                  fill="#fbbf24"
+                  stroke="#fff"
+                  strokeWidth={1.5}
+                  ifOverflow="extendDomain"
+                />
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {(data.peakDay || data.lastDay) && (
+        <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
+          {data.lastDay && data.lastValue > 0 && (
+            <div className="flex items-center gap-1.5" data-testid="ritmo-ponto-final">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: config.color }} />
+              <span className="text-white/50">
+                Acumulado ate dia {data.lastDay}: <span className="text-white font-medium">{fmt(data.lastValue)}</span>
+              </span>
+            </div>
+          )}
+          {data.peakDay && data.peakValue > 0 && (
+            <div className="flex items-center gap-1.5" data-testid="ritmo-ponto-pico">
+              <span className="w-2 h-2 rounded-full bg-amber-400" />
+              <span className="text-white/50">
+                {config.peakLabel} (dia {data.peakDay}): <span className="text-white font-medium">{fmt(data.peakValue)}</span>
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SummaryCard({ title, value, variacao, icon: Icon, iconColor, showBalance }) {
   const isPositive = variacao >= 0;
@@ -365,6 +604,9 @@ export default function OverviewSection() {
           )}
         </div>
       </div>
+
+      {/* Ritmo de gastos / receitas */}
+      <RitmoChart transactions={transactions} />
 
       {/* Financial Goals */}
       <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-4 sm:p-5">
