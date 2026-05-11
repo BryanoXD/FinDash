@@ -82,8 +82,21 @@ async def get_cards(request: Request, db=None, user_id: str = None):
 
 @router.post("", response_model=CreditCard)
 async def create_card(data: CreditCardCreate, request: Request, db=None, user_id: str = None):
-    """Create a new credit card"""
+    """Create a new credit card. Requires linked bank account and exactly 4 digits."""
+    # Require bank account
+    if not data.banco_id:
+        raise HTTPException(status_code=400, detail="Cartao deve estar vinculado a uma conta bancaria")
+    bank = await db.accounts.find_one({"id": data.banco_id, "user_id": user_id}, {"_id": 0})
+    if not bank:
+        raise HTTPException(status_code=400, detail="Conta bancaria informada nao encontrada")
+
+    # Validate last 4 digits
+    numero = (data.numero or "").strip()
+    if not (numero.isdigit() and len(numero) == 4):
+        raise HTTPException(status_code=400, detail="Informe exatamente os 4 ultimos digitos do cartao")
+
     card = CreditCard(user_id=user_id, **data.model_dump())
+    card.numero = numero
     doc = card.model_dump()
     doc["created_at"] = doc["created_at"].isoformat()
     await db.cards.insert_one(doc)
@@ -98,6 +111,20 @@ async def update_card(card_id: str, data: CreditCardUpdate, request: Request, db
         raise HTTPException(status_code=404, detail="Card not found")
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+
+    if "banco_id" in update_data:
+        if not update_data["banco_id"]:
+            raise HTTPException(status_code=400, detail="Cartao deve estar vinculado a uma conta bancaria")
+        bank = await db.accounts.find_one({"id": update_data["banco_id"], "user_id": user_id}, {"_id": 0})
+        if not bank:
+            raise HTTPException(status_code=400, detail="Conta bancaria informada nao encontrada")
+
+    if "numero" in update_data:
+        numero = (update_data["numero"] or "").strip()
+        if not (numero.isdigit() and len(numero) == 4):
+            raise HTTPException(status_code=400, detail="Informe exatamente os 4 ultimos digitos do cartao")
+        update_data["numero"] = numero
+
     if update_data:
         await db.cards.update_one({"id": card_id, "user_id": user_id}, {"$set": update_data})
     
