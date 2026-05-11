@@ -357,8 +357,13 @@ export function DataProvider({ children, user }) {
   const updatePlanejamento = async (id, data) => {
     const updated = await api.planejamentos.update(id, data);
     setPlanejamentos(prev => prev.map(p => p.id === id ? updated : p));
-    // If orcamentos were updated, goals may have been created/updated server-side
-    if (data.orcamentos !== undefined || data.titulo !== undefined) {
+    // Goal may have been created/updated/synced server-side; refresh goals
+    if (
+      data.orcamentos !== undefined ||
+      data.titulo !== undefined ||
+      data.criar_meta !== undefined ||
+      data.prazo !== undefined
+    ) {
       const updatedGoals = await api.goals.getAll();
       setGoals(updatedGoals);
     }
@@ -375,9 +380,8 @@ export function DataProvider({ children, user }) {
     return result;
   };
 
-  const deleteOrcamentoGoal = async (planId, orcId) => {
-    const result = await api.planejamentos.deleteOrcamentoGoal(planId, orcId);
-    // Reload affected plan and goals
+  const deletePlanGoal = async (planId) => {
+    const result = await api.planejamentos.deletePlanGoal(planId);
     const [updatedPlan, updatedGoals] = await Promise.all([
       api.planejamentos.get(planId),
       api.goals.getAll(),
@@ -436,7 +440,7 @@ export function DataProvider({ children, user }) {
     createFinancing, updateFinancing, deleteFinancing, payFinancingInstallment, payFinancingCustom,
     createBudget, updateBudget, deleteBudget,
     createGoal, updateGoal, deleteGoal, contributeToGoal,
-    createPlanejamento, updatePlanejamento, deletePlanejamento, deleteOrcamentoGoal,
+    createPlanejamento, updatePlanejamento, deletePlanejamento, deletePlanGoal,
     
     // Computed
     getSummary,

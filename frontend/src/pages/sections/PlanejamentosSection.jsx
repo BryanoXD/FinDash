@@ -17,7 +17,7 @@ import {
 } from "../../components/ui/dialog";
 import {
   Plus, Pencil, Trash2, NotebookPen, Target, ShoppingCart,
-  Scale, CheckSquare, ArrowLeft, Link2, X,
+  Scale, CheckSquare, ArrowLeft, X,
 } from "lucide-react";
 
 const COLORS = ["#6366f1", "#ec4899", "#f59e0b", "#10b981", "#3b82f6", "#a855f7", "#ef4444"];
@@ -77,7 +77,7 @@ function PlanList({ onOpen }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {planejamentos.map((p) => {
             const totalOrc = (p.orcamentos || []).reduce((s, o) => s + orcTotal(o), 0);
-            const linkedGoals = (p.orcamentos || []).filter(o => o.goal_id).length;
+            const hasGoal = !!p.goal_id;
             return (
               <button
                 key={p.id}
@@ -103,9 +103,9 @@ function PlanList({ onOpen }) {
                   <span className="text-white/40 text-xs">Total orcado</span>
                   <span className="text-white text-sm font-semibold">{fmt(totalOrc)}</span>
                 </div>
-                {linkedGoals > 0 && (
+                {hasGoal && (
                   <div className="mt-2 flex items-center gap-1.5 text-emerald-400 text-[10px]">
-                    <Target className="w-3 h-3" /> {linkedGoals} meta{linkedGoals > 1 ? "s" : ""} vinculada{linkedGoals > 1 ? "s" : ""}
+                    <Target className="w-3 h-3" /> Meta vinculada
                   </div>
                 )}
               </button>
@@ -233,36 +233,6 @@ function OrcamentoModal({ open, initial, onClose, onSave }) {
             <span className="text-white/60 text-sm">Total do orcamento</span>
             <span className="text-white text-base font-semibold">{fmt(total)}</span>
           </div>
-
-          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Target className="w-4 h-4 text-emerald-400" />
-                <span className="text-emerald-400 text-sm font-medium">Criar meta financeira</span>
-              </div>
-              <Toggle
-                on={!!form.criar_meta}
-                onChange={() => setForm({ ...form, criar_meta: !form.criar_meta })}
-              />
-            </div>
-            <p className="text-white/40 text-xs">
-              {form.criar_meta
-                ? form.goal_id
-                  ? "Meta vinculada - sera atualizada automaticamente ao salvar."
-                  : "Uma nova meta sera criada com o valor total deste orcamento."
-                : "Ative para criar uma meta vinculada (vai aparecer em Metas)."}
-            </p>
-            {form.criar_meta && (
-              <Field label="Prazo da meta (opcional)">
-                <Inp
-                  type="date"
-                  value={form.prazo || ""}
-                  onChange={(e) => setForm({ ...form, prazo: e.target.value })}
-                  className="[color-scheme:dark]"
-                />
-              </Field>
-            )}
-          </div>
         </div>
         <DialogFooter className="gap-2">
           <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
@@ -282,7 +252,7 @@ function OrcamentoModal({ open, initial, onClose, onSave }) {
 // ============== DETAIL VIEW (tabs) ==============
 function PlanDetail({ planId, onBack }) {
   const {
-    planejamentos, updatePlanejamento, deletePlanejamento, deleteOrcamentoGoal,
+    planejamentos, updatePlanejamento, deletePlanejamento, deletePlanGoal,
   } = useData();
   const plan = useMemo(() => planejamentos.find((p) => p.id === planId), [planejamentos, planId]);
   const [tab, setTab] = useState("notas");
@@ -292,7 +262,6 @@ function PlanDetail({ planId, onBack }) {
   const [orcModal, setOrcModal] = useState(null);
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteWithGoals, setDeleteWithGoals] = useState(false);
-  const [unlinkConfirm, setUnlinkConfirm] = useState(null);
 
   React.useEffect(() => {
     if (plan) {
@@ -339,16 +308,50 @@ function PlanDetail({ planId, onBack }) {
 
   const removeOrcamento = async (orc) => {
     if (!window.confirm(`Remover orcamento "${orc.titulo}"?`)) return;
-    let removeGoal = false;
-    if (orc.goal_id) {
-      removeGoal = window.confirm("Este orcamento tem uma meta vinculada. Remover a meta tambem?");
-    }
     const orcs = (plan.orcamentos || []).filter((o) => o.id !== orc.id);
     try {
-      if (removeGoal) {
-        await deleteOrcamentoGoal(plan.id, orc.id);
-      }
       await updatePlanejamento(plan.id, { orcamentos: orcs });
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const togglePlanMeta = async () => {
+    if (plan.criar_meta) {
+      // Turning OFF - ask if linked goal should be deleted too
+      if (plan.goal_id) {
+        const remove = window.confirm(
+          "Desativar a meta vinculada. Tambem remover a meta de \"Metas\"?"
+        );
+        try {
+          if (remove) {
+            await deletePlanGoal(plan.id);
+          } else {
+            await updatePlanejamento(plan.id, { criar_meta: false });
+          }
+        } catch (e) {
+          alert(e.message);
+        }
+      } else {
+        try {
+          await updatePlanejamento(plan.id, { criar_meta: false });
+        } catch (e) {
+          alert(e.message);
+        }
+      }
+      return;
+    }
+    // Turning ON
+    try {
+      await updatePlanejamento(plan.id, { criar_meta: true });
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const updatePlanPrazo = async (prazo) => {
+    try {
+      await updatePlanejamento(plan.id, { prazo });
     } catch (e) {
       alert(e.message);
     }
@@ -449,6 +452,44 @@ function PlanDetail({ planId, onBack }) {
         />
       </div>
 
+      {/* Plan-level Meta card */}
+      <div className="bg-[#111111] border border-emerald-500/20 rounded-xl p-4 sm:p-5">
+        <div className="flex items-start sm:items-center justify-between gap-3 flex-col sm:flex-row">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+              <Target className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-white font-medium text-sm">Meta deste planejamento</p>
+              <p className="text-white/40 text-xs">
+                Soma de {(plan.orcamentos || []).length} orcamento{(plan.orcamentos || []).length === 1 ? "" : "s"}:
+                {" "}<span className="text-white/70 font-medium">{fmt((plan.orcamentos || []).reduce((s, o) => s + orcTotal(o), 0))}</span>
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {plan.criar_meta && (
+              <input
+                type="date"
+                data-testid="plan-meta-prazo"
+                value={plan.prazo || ""}
+                onChange={(e) => updatePlanPrazo(e.target.value)}
+                className="bg-white/[0.04] border border-white/[0.08] rounded-md px-2 py-1 text-white/80 text-xs [color-scheme:dark]"
+                placeholder="Prazo"
+              />
+            )}
+            <Toggle on={!!plan.criar_meta} onChange={togglePlanMeta} />
+          </div>
+        </div>
+        <p className="text-white/40 text-xs mt-3">
+          {plan.criar_meta
+            ? plan.goal_id
+              ? "Esta meta esta vinculada e aparece em \"Metas\". Alteracoes em qualquer orcamento sao sincronizadas automaticamente."
+              : "Ativando... a meta sera criada em \"Metas\" no proximo save."
+            : "Ative para criar 1 meta em \"Metas\" com o valor total deste planejamento."}
+        </p>
+      </div>
+
       <div className="flex gap-1.5 flex-wrap bg-[#0f0f0f] border border-white/[0.06] rounded-lg p-1">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
@@ -486,7 +527,7 @@ function PlanDetail({ planId, onBack }) {
       {tab === "orcamentos" && (
         <div className="space-y-3">
           <div className="flex justify-end">
-            <Btn data-testid="orc-new-btn" onClick={() => setOrcModal({ titulo: "", items: [], criar_meta: false })}>
+            <Btn data-testid="orc-new-btn" onClick={() => setOrcModal({ titulo: "", items: [] })}>
               <Plus className="w-4 h-4 inline mr-1" /> Novo orcamento
             </Btn>
           </div>
@@ -519,11 +560,6 @@ function PlanDetail({ planId, onBack }) {
                       <span className="text-white/40 text-xs">Total</span>
                       <span className="text-white font-semibold">{fmt(total)}</span>
                     </div>
-                    {orc.goal_id && (
-                      <div className="mt-3 flex items-center gap-1.5 text-emerald-400 text-xs">
-                        <Link2 className="w-3 h-3" /> Meta vinculada
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -804,7 +840,7 @@ function PlanDetail({ planId, onBack }) {
             <p className="text-white/60 text-sm">
               Esta acao remove o planejamento "{plan.titulo}" e todos os seus orcamentos, listas e tarefas.
             </p>
-            {(plan.orcamentos || []).some((o) => o.goal_id) && (
+            {plan.goal_id && (
               <label className="flex items-start gap-2 cursor-pointer bg-amber-500/5 border border-amber-500/20 rounded-lg p-3">
                 <input
                   type="checkbox"
@@ -814,7 +850,7 @@ function PlanDetail({ planId, onBack }) {
                   className="mt-0.5 accent-amber-500"
                 />
                 <span className="text-amber-400/90 text-xs">
-                  Tambem remover as metas vinculadas a este planejamento ({(plan.orcamentos || []).filter(o => o.goal_id).length})
+                  Tambem remover a meta vinculada de "Metas"
                 </span>
               </label>
             )}

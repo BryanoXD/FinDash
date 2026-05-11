@@ -371,8 +371,8 @@ export const planejamentosAPI = {
       method: 'DELETE',
     }),
 
-  deleteOrcamentoGoal: (planId, orcId) =>
-    apiCall(`/api/planejamentos/${planId}/orcamentos/${orcId}/goal`, { method: 'DELETE' }),
+  deletePlanGoal: (planId) =>
+    apiCall(`/api/planejamentos/${planId}/goal`, { method: 'DELETE' }),
 };
 
 // Import API

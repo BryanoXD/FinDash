@@ -604,10 +604,10 @@ async def delete_planejamento(plan_id: str, request: Request):
     return await planejamentos_route.delete_planejamento(plan_id, request, db=db, user_id=user_id)
 
 
-@app.delete("/api/planejamentos/{plan_id}/orcamentos/{orc_id}/goal")
-async def delete_orcamento_goal(plan_id: str, orc_id: str, request: Request):
+@app.delete("/api/planejamentos/{plan_id}/goal")
+async def delete_plan_goal(plan_id: str, request: Request):
     user_id = await get_current_user_id(request, db)
-    return await planejamentos_route.delete_orcamento_goal(plan_id, orc_id, request, db=db, user_id=user_id)
+    return await planejamentos_route.delete_plan_goal(plan_id, request, db=db, user_id=user_id)
 
 
 # ========== IMPORT ROUTES ==========

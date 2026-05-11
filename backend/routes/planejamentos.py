@@ -34,9 +34,6 @@ class Orcamento(BaseModel):
     id: str = Field(default_factory=lambda: generate_id("orc_"))
     titulo: str
     items: List[OrcamentoItem] = []
-    criar_meta: bool = False
-    goal_id: Optional[str] = None
-    prazo: Optional[str] = None  # ISO date, optional; used when creating linked goal
 
 
 class ListaCompraItem(BaseModel):
@@ -89,6 +86,10 @@ class Planejamento(BaseModel):
     listas: List[ListaCompra] = []
     comparadores: List[Comparador] = []
     checklists: List[Checklist] = []
+    # Single goal linked to the entire planejamento (sum of all orcamentos)
+    criar_meta: bool = False
+    goal_id: Optional[str] = None
+    prazo: Optional[str] = None  # ISO date used when (re)creating the linked goal
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -98,6 +99,8 @@ class PlanejamentoCreate(BaseModel):
     descricao_md: str = ""
     cor: str = "#6366f1"
     icone: str = "FileText"
+    criar_meta: bool = False
+    prazo: Optional[str] = None
 
 
 class PlanejamentoUpdate(BaseModel):
@@ -109,6 +112,8 @@ class PlanejamentoUpdate(BaseModel):
     listas: Optional[List[ListaCompra]] = None
     comparadores: Optional[List[Comparador]] = None
     checklists: Optional[List[Checklist]] = None
+    criar_meta: Optional[bool] = None
+    prazo: Optional[str] = None
 
 
 # ============== Helpers ==============
@@ -133,58 +138,55 @@ def _serialize_plan(doc: dict) -> dict:
     return doc
 
 
-async def _create_or_update_linked_goal(orc: dict, plan_titulo: str, user_id: str, db) -> Optional[str]:
-    """
-    If `criar_meta` is True, ensure a goal exists and is in sync with the orcamento.
-    Returns the goal_id (existing or newly created), or None if no goal should exist.
-    """
-    if not orc.get("criar_meta"):
-        return orc.get("goal_id")  # leave as-is
+def _plan_total(plan: dict) -> float:
+    """Sum of every orcamento total."""
+    return round(sum(_orc_total(o) for o in (plan.get("orcamentos") or [])), 2)
 
-    total = _orc_total(orc)
-    goal_nome = f"{plan_titulo} - {orc.get('titulo') or 'Orcamento'}"
-    prazo = orc.get("prazo") or "2030-12-31"
 
-    existing_goal_id = orc.get("goal_id")
+async def _sync_plan_goal(plan: dict, db) -> dict:
+    """
+    Ensure the planejamento's linked Meta financeira is in sync.
+
+    - If `criar_meta` is True and no `goal_id`, create a new goal.
+    - If `criar_meta` is True and `goal_id` exists, update its nome/valor_meta/prazo.
+    - If `criar_meta` is False, leave `goal_id` as-is (caller may detach via separate endpoint).
+
+    The goal's `valor_meta` is always the sum of all orcamento totals.
+    """
+    user_id = plan["user_id"]
+    titulo = plan.get("titulo") or "Planejamento"
+    total = _plan_total(plan)
+    prazo = plan.get("prazo") or "2030-12-31"
+
+    if not plan.get("criar_meta"):
+        return plan
+
+    existing_goal_id = plan.get("goal_id")
     if existing_goal_id:
-        existing = await db.goals.find_one({"id": existing_goal_id, "user_id": user_id}, {"_id": 0})
+        existing = await db.goals.find_one(
+            {"id": existing_goal_id, "user_id": user_id}, {"_id": 0}
+        )
         if existing:
             await db.goals.update_one(
                 {"id": existing_goal_id, "user_id": user_id},
-                {"$set": {"nome": goal_nome, "valor_meta": total, "prazo": prazo}},
+                {"$set": {"nome": titulo, "valor_meta": total, "prazo": prazo}},
             )
-            return existing_goal_id
+            return plan
+        # Stale reference - fall through to create
 
-    # Create new goal
     goal = FinancialGoal(
         user_id=user_id,
-        nome=goal_nome,
+        nome=titulo,
         valor_meta=total,
         prazo=prazo,
         icone="Target",
     )
     doc = goal.model_dump()
     doc["created_at"] = doc["created_at"].isoformat()
-    doc["planejamento_orcamento_id"] = orc.get("id")
+    doc["planejamento_id"] = plan.get("id")
     await db.goals.insert_one(doc)
-    return goal.id
-
-
-async def _sync_goals_for_plan(plan_doc: dict, db) -> dict:
-    """Walk through orcamentos and sync each linked goal. Returns updated plan_doc."""
-    user_id = plan_doc["user_id"]
-    titulo = plan_doc.get("titulo") or "Planejamento"
-    orcamentos = plan_doc.get("orcamentos") or []
-    for orc in orcamentos:
-        if orc.get("criar_meta"):
-            goal_id = await _create_or_update_linked_goal(orc, titulo, user_id, db)
-            orc["goal_id"] = goal_id
-        else:
-            # Toggle was turned OFF — keep goal_id but do not auto-update goal.
-            # If user wants to delete the linked goal, they do it via the dedicated endpoint.
-            pass
-    plan_doc["orcamentos"] = orcamentos
-    return plan_doc
+    plan["goal_id"] = goal.id
+    return plan
 
 
 # ============== Routes ==============
@@ -197,11 +199,13 @@ async def get_planejamentos(request: Request, db=None, user_id: str = None):
 
 @router.post("")
 async def create_planejamento(data: PlanejamentoCreate, request: Request, db=None, user_id: str = None):
-    """Create a new (empty) planejamento."""
+    """Create a new (empty) planejamento. May immediately create a linked Meta if criar_meta=true."""
     plan = Planejamento(user_id=user_id, **data.model_dump())
     doc = plan.model_dump()
     doc["created_at"] = doc["created_at"].isoformat()
     doc["updated_at"] = doc["updated_at"].isoformat()
+    if doc.get("criar_meta"):
+        doc = await _sync_plan_goal(doc, db)
     await db.planejamentos.insert_one(doc)
     return _serialize_plan(doc)
 
@@ -217,8 +221,8 @@ async def get_planejamento(plan_id: str, request: Request, db=None, user_id: str
 @router.put("/{plan_id}")
 async def update_planejamento(plan_id: str, data: PlanejamentoUpdate, request: Request, db=None, user_id: str = None):
     """
-    Update planejamento. If `orcamentos` are passed, each orcamento with
-    `criar_meta=True` will be synced with its linked goal (create or update).
+    Update planejamento. If `criar_meta` is True (now or already), the linked Meta
+    is kept in sync with the sum of all orcamento totals and the current titulo.
     """
     existing = await db.planejamentos.find_one({"id": plan_id, "user_id": user_id}, {"_id": 0})
     if not existing:
@@ -233,9 +237,10 @@ async def update_planejamento(plan_id: str, data: PlanejamentoUpdate, request: R
     # Merge incoming into existing to determine final state for goal sync
     merged = {**existing, **update_data}
 
-    if "orcamentos" in update_data or "titulo" in update_data:
-        merged = await _sync_goals_for_plan(merged, db)
-        update_data["orcamentos"] = merged.get("orcamentos", [])
+    # Trigger sync when anything that affects the linked goal changes
+    if any(k in update_data for k in ("orcamentos", "titulo", "criar_meta", "prazo")):
+        merged = await _sync_plan_goal(merged, db)
+        update_data["goal_id"] = merged.get("goal_id")
 
     await db.planejamentos.update_one(
         {"id": plan_id, "user_id": user_id},
@@ -251,7 +256,7 @@ async def delete_planejamento(plan_id: str, request: Request, db=None, user_id: 
     """
     Delete a planejamento.
 
-    Query param `delete_linked_goals=true` will also delete every linked goal.
+    Query param `delete_linked_goals=true` will also delete the linked Meta.
     """
     delete_goals = request.query_params.get("delete_linked_goals", "false").lower() == "true"
 
@@ -261,39 +266,35 @@ async def delete_planejamento(plan_id: str, request: Request, db=None, user_id: 
 
     deleted_goals = []
     if delete_goals:
-        for orc in existing.get("orcamentos", []) or []:
-            gid = orc.get("goal_id")
-            if gid:
-                r = await db.goals.delete_one({"id": gid, "user_id": user_id})
-                if r.deleted_count:
-                    deleted_goals.append(gid)
+        gid = existing.get("goal_id")
+        if gid:
+            r = await db.goals.delete_one({"id": gid, "user_id": user_id})
+            if r.deleted_count:
+                deleted_goals.append(gid)
 
     await db.planejamentos.delete_one({"id": plan_id, "user_id": user_id})
     return {"message": "Planejamento removido", "deleted_goals": deleted_goals}
 
 
-@router.delete("/{plan_id}/orcamentos/{orc_id}/goal")
-async def delete_orcamento_goal(plan_id: str, orc_id: str, request: Request, db=None, user_id: str = None):
-    """Detach a goal from an orcamento and delete it."""
+@router.delete("/{plan_id}/goal")
+async def delete_plan_goal(plan_id: str, request: Request, db=None, user_id: str = None):
+    """Detach and delete the Meta linked to this planejamento."""
     plan = await db.planejamentos.find_one({"id": plan_id, "user_id": user_id}, {"_id": 0})
     if not plan:
         raise HTTPException(status_code=404, detail="Planejamento nao encontrado")
 
-    orcs = plan.get("orcamentos", []) or []
-    target = next((o for o in orcs if o.get("id") == orc_id), None)
-    if not target:
-        raise HTTPException(status_code=404, detail="Orcamento nao encontrado")
-
-    gid = target.get("goal_id")
+    gid = plan.get("goal_id")
     deleted = False
     if gid:
         r = await db.goals.delete_one({"id": gid, "user_id": user_id})
         deleted = r.deleted_count > 0
-    target["goal_id"] = None
-    target["criar_meta"] = False
 
     await db.planejamentos.update_one(
         {"id": plan_id, "user_id": user_id},
-        {"$set": {"orcamentos": orcs, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        {"$set": {
+            "goal_id": None,
+            "criar_meta": False,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
     )
     return {"message": "Meta vinculada removida", "deleted": deleted, "goal_id": gid}
