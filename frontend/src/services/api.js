@@ -375,6 +375,16 @@ export const planejamentosAPI = {
     apiCall(`/api/planejamentos/${planId}/goal`, { method: 'DELETE' }),
 };
 
+// ============== SUBSCRIPTIONS ==============
+export const subscriptionsAPI = {
+  getAll: () => apiCall('/api/subscriptions'),
+  getStats: () => apiCall('/api/subscriptions/stats'),
+  create: (data) => apiCall('/api/subscriptions', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => apiCall(`/api/subscriptions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id) => apiCall(`/api/subscriptions/${id}`, { method: 'DELETE' }),
+  chargeNow: (id) => apiCall(`/api/subscriptions/${id}/charge-now`, { method: 'POST' }),
+};
+
 // Import API
 const importAPI = {
   upload: async (file) => {
@@ -432,6 +442,7 @@ const api = {
   budgets: budgetsAPI,
   goals: goalsAPI,
   planejamentos: planejamentosAPI,
+  subscriptions: subscriptionsAPI,
   import: importAPI,
 };
 

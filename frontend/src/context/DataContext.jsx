@@ -25,6 +25,7 @@ export function DataProvider({ children, user }) {
   const [budgets, setBudgets] = useState([]);
   const [goals, setGoals] = useState([]);
   const [planejamentos, setPlanejamentos] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
 
   // Load all data on mount
   const loadAllData = useCallback(async () => {
@@ -44,6 +45,7 @@ export function DataProvider({ children, user }) {
         budgetsData,
         goalsData,
         planejamentosData,
+        subscriptionsData,
       ] = await Promise.all([
         api.categories.getAll(),
         api.tags.getAll(),
@@ -57,6 +59,7 @@ export function DataProvider({ children, user }) {
         api.budgets.getAll(),
         api.goals.getAll(),
         api.planejamentos.getAll(),
+        api.subscriptions.getAll(),
       ]);
 
       setCategories(categoriesData);
@@ -71,6 +74,7 @@ export function DataProvider({ children, user }) {
       setBudgets(budgetsData);
       setGoals(goalsData);
       setPlanejamentos(planejamentosData);
+      setSubscriptions(subscriptionsData);
     } catch (err) {
       console.error('Error loading data:', err);
       setError(err.message);
@@ -391,6 +395,39 @@ export function DataProvider({ children, user }) {
     return result;
   };
 
+  // ============== SUBSCRIPTION ACTIONS ==============
+  const reloadSubscriptions = async () => {
+    const list = await api.subscriptions.getAll();
+    setSubscriptions(list);
+    return list;
+  };
+
+  const createSubscription = async (data) => {
+    await api.subscriptions.create(data);
+    return reloadSubscriptions();
+  };
+
+  const updateSubscription = async (id, data) => {
+    await api.subscriptions.update(id, data);
+    return reloadSubscriptions();
+  };
+
+  const deleteSubscription = async (id) => {
+    await api.subscriptions.delete(id);
+    setSubscriptions(prev => prev.filter(s => s.id !== id));
+  };
+
+  const chargeSubscriptionNow = async (id) => {
+    const result = await api.subscriptions.chargeNow(id);
+    const [subs, txs] = await Promise.all([
+      api.subscriptions.getAll(),
+      api.transactions.getAll(),
+    ]);
+    setSubscriptions(subs);
+    setTransactions(txs);
+    return result;
+  };
+
   // ============== COMPUTED VALUES ==============
   const getSummary = () => {
     const receitas = transactions.filter(t => t.tipo === 'receita').reduce((sum, t) => sum + t.valor, 0);
@@ -426,6 +463,7 @@ export function DataProvider({ children, user }) {
     budgets,
     goals,
     planejamentos,
+    subscriptions,
     
     // Actions
     loadAllData,
@@ -441,6 +479,7 @@ export function DataProvider({ children, user }) {
     createBudget, updateBudget, deleteBudget,
     createGoal, updateGoal, deleteGoal, contributeToGoal,
     createPlanejamento, updatePlanejamento, deletePlanejamento, deletePlanGoal,
+    createSubscription, updateSubscription, deleteSubscription, chargeSubscriptionNow, reloadSubscriptions,
     
     // Computed
     getSummary,

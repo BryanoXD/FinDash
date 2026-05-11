@@ -19,6 +19,7 @@ import {
   PiggyBank,
   Calculator,
   NotebookPen,
+  Repeat,
   X,
 } from "lucide-react";
 
@@ -35,6 +36,7 @@ const menuItems = [
   { id: "import", label: "Importar Extratos", icon: Upload, path: "/dashboard/importar" },
   { id: "reports", label: "Relatorios", icon: FileText, path: "/dashboard/relatorios" },
   { id: "goals", label: "Metas", icon: Target, path: "/dashboard/metas" },
+  { id: "subscriptions", label: "Assinaturas", icon: Repeat, path: "/dashboard/assinaturas" },
   { id: "planejamentos", label: "Planejamentos", icon: NotebookPen, path: "/dashboard/planejamentos" },
 ];
 

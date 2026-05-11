@@ -21,6 +21,7 @@ load_dotenv(ROOT_DIR / '.env')
 from routes import auth, categories, tags, transactions, accounts, cards, investments, financings, budgets, goals
 from routes import imports as imports_route
 from routes import planejamentos as planejamentos_route
+from routes import subscriptions as subscriptions_route
 from routes.auth import get_current_user_id
 from models import User, UserSession
 from seed import seed_user_data
@@ -608,6 +609,43 @@ async def delete_planejamento(plan_id: str, request: Request):
 async def delete_plan_goal(plan_id: str, request: Request):
     user_id = await get_current_user_id(request, db)
     return await planejamentos_route.delete_plan_goal(plan_id, request, db=db, user_id=user_id)
+
+
+# ============== SUBSCRIPTIONS ROUTES ==============
+@app.get("/api/subscriptions/stats")
+async def get_subscriptions_stats(request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await subscriptions_route.get_stats(request, db=db, user_id=user_id)
+
+
+@app.get("/api/subscriptions")
+async def list_subscriptions(request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await subscriptions_route.list_subscriptions(request, db=db, user_id=user_id)
+
+
+@app.post("/api/subscriptions")
+async def create_subscription(data: subscriptions_route.SubscriptionCreate, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await subscriptions_route.create_subscription(data, request, db=db, user_id=user_id)
+
+
+@app.put("/api/subscriptions/{sub_id}")
+async def update_subscription(sub_id: str, data: subscriptions_route.SubscriptionUpdate, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await subscriptions_route.update_subscription(sub_id, data, request, db=db, user_id=user_id)
+
+
+@app.delete("/api/subscriptions/{sub_id}")
+async def delete_subscription(sub_id: str, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await subscriptions_route.delete_subscription(sub_id, request, db=db, user_id=user_id)
+
+
+@app.post("/api/subscriptions/{sub_id}/charge-now")
+async def charge_subscription_now(sub_id: str, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await subscriptions_route.charge_now(sub_id, request, db=db, user_id=user_id)
 
 
 # ========== IMPORT ROUTES ==========

@@ -18,6 +18,7 @@ import {
   SettingsSection,
 } from "./sections/OtherSections";
 import PlanejamentosSection from "./sections/PlanejamentosSection";
+import AssinaturasSection from "./sections/AssinaturasSection";
 
 function DashboardContent() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -122,6 +123,7 @@ function DashboardContent() {
           <Route path="relatorios" element={<ReportsSection />} />
           <Route path="metas" element={<MetasSection />} />
           <Route path="planejamentos" element={<PlanejamentosSection />} />
+          <Route path="assinaturas" element={<AssinaturasSection />} />
           <Route path="configuracoes" element={<SettingsSection />} />
         </Routes>
       </main>
