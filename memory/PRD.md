@@ -7,9 +7,15 @@ Clone do FinPulse - gestao financeira pessoal completa em portugues brasileiro.
 - Frontend: React 18 + TailwindCSS + Shadcn/UI + Recharts + DataContext
 - Backend: FastAPI + MongoDB (Motor) + Emergent Google OAuth
 
-## Completed Phases (1-9)
+## Completed Phases (1-10)
 - Phases 1-8: Full CRUD, Auth, Responsividade, PDF Export, Despesas com vencimento/recorrentes
 - Phase 9 (21/04/2026): Importacao completa de extratos (CSV, OFX, PDF)
+- Phase 10 (11/05/2026): Modulo Planejamentos (Notion-style Markdown)
+  - Backend: routes/planejamentos.py com CRUD + sync de metas vinculadas
+  - Frontend: pages/sections/PlanejamentosSection.jsx com 5 tabs (Notas, Orcamentos, Compras, Precos, Tarefas)
+  - Toggle "Criar meta" em cada orcamento cria/atualiza meta financeira automaticamente
+  - Delete cascateado opcional (pergunta se deve remover metas vinculadas)
+  - Vinculo por ID (goal_id no orcamento + planejamento_orcamento_id no goal) evita duplicacao
   - Backend: parsers modulares (csv, ofx, pdf), normalizacao, categorizacao automatica, deduplicacao
   - Frontend: UI completa com drag&drop, preview, revisao, confirmacao
   - 11 categorias com palavras-chave (Alimentacao, Transporte, Moradia, Saude, Lazer, Educacao, Assinaturas, Salario, Investimentos, Transferencias, Outros)

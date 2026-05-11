@@ -24,6 +24,7 @@ export function DataProvider({ children, user }) {
   const [financings, setFinancings] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [goals, setGoals] = useState([]);
+  const [planejamentos, setPlanejamentos] = useState([]);
 
   // Load all data on mount
   const loadAllData = useCallback(async () => {
@@ -42,6 +43,7 @@ export function DataProvider({ children, user }) {
         financingsData,
         budgetsData,
         goalsData,
+        planejamentosData,
       ] = await Promise.all([
         api.categories.getAll(),
         api.tags.getAll(),
@@ -54,6 +56,7 @@ export function DataProvider({ children, user }) {
         api.financings.getAll(),
         api.budgets.getAll(),
         api.goals.getAll(),
+        api.planejamentos.getAll(),
       ]);
 
       setCategories(categoriesData);
@@ -67,6 +70,7 @@ export function DataProvider({ children, user }) {
       setFinancings(financingsData);
       setBudgets(budgetsData);
       setGoals(goalsData);
+      setPlanejamentos(planejamentosData);
     } catch (err) {
       console.error('Error loading data:', err);
       setError(err.message);
@@ -343,6 +347,46 @@ export function DataProvider({ children, user }) {
     return result;
   };
 
+  // ============== PLANEJAMENTO ACTIONS ==============
+  const createPlanejamento = async (data) => {
+    const novo = await api.planejamentos.create(data);
+    setPlanejamentos(prev => [novo, ...prev]);
+    return novo;
+  };
+
+  const updatePlanejamento = async (id, data) => {
+    const updated = await api.planejamentos.update(id, data);
+    setPlanejamentos(prev => prev.map(p => p.id === id ? updated : p));
+    // If orcamentos were updated, goals may have been created/updated server-side
+    if (data.orcamentos !== undefined || data.titulo !== undefined) {
+      const updatedGoals = await api.goals.getAll();
+      setGoals(updatedGoals);
+    }
+    return updated;
+  };
+
+  const deletePlanejamento = async (id, { deleteLinkedGoals = false } = {}) => {
+    const result = await api.planejamentos.delete(id, { deleteLinkedGoals });
+    setPlanejamentos(prev => prev.filter(p => p.id !== id));
+    if (deleteLinkedGoals) {
+      const updatedGoals = await api.goals.getAll();
+      setGoals(updatedGoals);
+    }
+    return result;
+  };
+
+  const deleteOrcamentoGoal = async (planId, orcId) => {
+    const result = await api.planejamentos.deleteOrcamentoGoal(planId, orcId);
+    // Reload affected plan and goals
+    const [updatedPlan, updatedGoals] = await Promise.all([
+      api.planejamentos.get(planId),
+      api.goals.getAll(),
+    ]);
+    setPlanejamentos(prev => prev.map(p => p.id === planId ? updatedPlan : p));
+    setGoals(updatedGoals);
+    return result;
+  };
+
   // ============== COMPUTED VALUES ==============
   const getSummary = () => {
     const receitas = transactions.filter(t => t.tipo === 'receita').reduce((sum, t) => sum + t.valor, 0);
@@ -377,6 +421,7 @@ export function DataProvider({ children, user }) {
     financings,
     budgets,
     goals,
+    planejamentos,
     
     // Actions
     loadAllData,
@@ -391,6 +436,7 @@ export function DataProvider({ children, user }) {
     createFinancing, updateFinancing, deleteFinancing, payFinancingInstallment, payFinancingCustom,
     createBudget, updateBudget, deleteBudget,
     createGoal, updateGoal, deleteGoal, contributeToGoal,
+    createPlanejamento, updatePlanejamento, deletePlanejamento, deleteOrcamentoGoal,
     
     // Computed
     getSummary,

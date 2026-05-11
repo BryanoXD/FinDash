@@ -20,6 +20,7 @@ load_dotenv(ROOT_DIR / '.env')
 # Import routes
 from routes import auth, categories, tags, transactions, accounts, cards, investments, financings, budgets, goals
 from routes import imports as imports_route
+from routes import planejamentos as planejamentos_route
 from routes.auth import get_current_user_id
 from models import User, UserSession
 from seed import seed_user_data
@@ -570,6 +571,43 @@ async def delete_goal(goal_id: str, request: Request):
 async def contribute_to_goal(goal_id: str, data: goals.GoalContributionCreate, request: Request):
     user_id = await get_current_user_id(request, db)
     return await goals.contribute_to_goal(goal_id, data, request, db=db, user_id=user_id)
+
+
+# ============== PLANEJAMENTOS ROUTES ==============
+@app.get("/api/planejamentos")
+async def get_planejamentos(request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await planejamentos_route.get_planejamentos(request, db=db, user_id=user_id)
+
+
+@app.post("/api/planejamentos")
+async def create_planejamento(data: planejamentos_route.PlanejamentoCreate, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await planejamentos_route.create_planejamento(data, request, db=db, user_id=user_id)
+
+
+@app.get("/api/planejamentos/{plan_id}")
+async def get_planejamento(plan_id: str, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await planejamentos_route.get_planejamento(plan_id, request, db=db, user_id=user_id)
+
+
+@app.put("/api/planejamentos/{plan_id}")
+async def update_planejamento(plan_id: str, data: planejamentos_route.PlanejamentoUpdate, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await planejamentos_route.update_planejamento(plan_id, data, request, db=db, user_id=user_id)
+
+
+@app.delete("/api/planejamentos/{plan_id}")
+async def delete_planejamento(plan_id: str, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await planejamentos_route.delete_planejamento(plan_id, request, db=db, user_id=user_id)
+
+
+@app.delete("/api/planejamentos/{plan_id}/orcamentos/{orc_id}/goal")
+async def delete_orcamento_goal(plan_id: str, orc_id: str, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await planejamentos_route.delete_orcamento_goal(plan_id, orc_id, request, db=db, user_id=user_id)
 
 
 # ========== IMPORT ROUTES ==========

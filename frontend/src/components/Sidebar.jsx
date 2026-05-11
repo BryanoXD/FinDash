@@ -18,6 +18,7 @@ import {
   ChevronRight,
   PiggyBank,
   Calculator,
+  NotebookPen,
   X,
 } from "lucide-react";
 
@@ -34,6 +35,7 @@ const menuItems = [
   { id: "import", label: "Importar Extratos", icon: Upload, path: "/dashboard/importar" },
   { id: "reports", label: "Relatorios", icon: FileText, path: "/dashboard/relatorios" },
   { id: "goals", label: "Metas", icon: Target, path: "/dashboard/metas" },
+  { id: "planejamentos", label: "Planejamentos", icon: NotebookPen, path: "/dashboard/planejamentos" },
 ];
 
 const bottomItems = [

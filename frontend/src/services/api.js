@@ -348,6 +348,33 @@ export const goalsAPI = {
     }),
 };
 
+// ============== PLANEJAMENTOS ==============
+export const planejamentosAPI = {
+  getAll: () => apiCall('/api/planejamentos'),
+
+  get: (id) => apiCall(`/api/planejamentos/${id}`),
+
+  create: (data) =>
+    apiCall('/api/planejamentos', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id, data) =>
+    apiCall(`/api/planejamentos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id, { deleteLinkedGoals = false } = {}) =>
+    apiCall(`/api/planejamentos/${id}?delete_linked_goals=${deleteLinkedGoals ? 'true' : 'false'}`, {
+      method: 'DELETE',
+    }),
+
+  deleteOrcamentoGoal: (planId, orcId) =>
+    apiCall(`/api/planejamentos/${planId}/orcamentos/${orcId}/goal`, { method: 'DELETE' }),
+};
+
 // Import API
 const importAPI = {
   upload: async (file) => {
@@ -404,6 +431,7 @@ const api = {
   financings: financingsAPI,
   budgets: budgetsAPI,
   goals: goalsAPI,
+  planejamentos: planejamentosAPI,
   import: importAPI,
 };
 
