@@ -649,87 +649,22 @@ async def charge_subscription_now(sub_id: str, request: Request):
 
 
 # ========== IMPORT ROUTES ==========
-from fastapi import UploadFile, File
-
 @app.post("/api/import/upload")
 async def import_upload(request: Request):
-    """Upload file as base64 JSON or multipart FormData."""
     user_id = await get_current_user_id(request, db)
-    
-    content_type = request.headers.get("content-type", "")
-    logger.info(f"Import upload - content-type: {content_type}, user: {user_id}")
-    
-    if "application/json" in content_type:
-        try:
-            body = await request.json()
-        except Exception as e:
-            logger.error(f"Import: JSON parse error: {e}")
-            raise HTTPException(status_code=400, detail="JSON invalido no body da requisicao")
-        
-        import base64
-        file_b64 = body.get("file_base64")
-        filename = body.get("filename", "upload.csv")
-        
-        if not file_b64:
-            raise HTTPException(status_code=400, detail="Campo 'file_base64' nao encontrado")
-        
-        try:
-            file_content = base64.b64decode(file_b64)
-        except Exception as e:
-            logger.error(f"Import: base64 decode error: {e}")
-            raise HTTPException(status_code=400, detail="Erro ao decodificar base64 do arquivo")
-        
-        logger.info(f"Import: file={filename}, size={len(file_content)} bytes")
-        
-        if len(file_content) == 0:
-            raise HTTPException(status_code=400, detail="Arquivo vazio")
-        if len(file_content) > 10 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="Arquivo muito grande. Maximo 10MB.")
-        
-        class FakeFile:
-            def __init__(self, fn, ct):
-                self.filename = fn
-                self._content = ct
-            async def read(self):
-                return self._content
-        
-        return await imports_route.upload_and_parse(FakeFile(filename, file_content), request, db=db, user_id=user_id)
-    
-    else:
-        # Multipart fallback
-        try:
-            form = await request.form()
-            file = form.get("file")
-            if not file:
-                raise HTTPException(status_code=400, detail="Campo 'file' nao encontrado. Envie como JSON {file_base64, filename} ou FormData com campo 'file'.")
-            content = await file.read()
-            logger.info(f"Import multipart: file={file.filename}, size={len(content)} bytes")
-            if len(content) == 0:
-                raise HTTPException(status_code=400, detail="Arquivo vazio")
-            
-            class FormFile:
-                def __init__(self, fn, ct):
-                    self.filename = fn
-                    self._content = ct
-                async def read(self):
-                    return self._content
-            
-            return await imports_route.upload_and_parse(FormFile(file.filename, content), request, db=db, user_id=user_id)
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Import multipart error: {e}")
-            raise HTTPException(status_code=400, detail=f"Erro ao processar upload: {str(e)}")
+    return await imports_route.upload_and_parse(request, db=db, user_id=user_id)
+
 
 @app.post("/api/import/confirm")
 async def import_confirm(request: Request):
     user_id = await get_current_user_id(request, db)
     return await imports_route.confirm_import(request, db=db, user_id=user_id)
 
+
 @app.get("/api/import/history")
 async def import_history(request: Request):
     user_id = await get_current_user_id(request, db)
-    return await imports_route.get_import_history(request, db=db, user_id=user_id)
+    return await imports_route.get_history(request, db=db, user_id=user_id)
 
 
 @app.on_event("shutdown")

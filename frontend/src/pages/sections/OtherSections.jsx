@@ -597,7 +597,7 @@ export function ImportSection() {
       const result = await api.import.upload(file);
       setBatchData(result);
       // Selecionar todos que não são duplicatas
-      const ids = new Set(result.transactions.filter(t => t.status !== "duplicate").map(t => t.id));
+      const ids = new Set(result.transactions.filter(t => !t.duplicate).map(t => t.id));
       setSelected(ids);
       setStep("preview");
     } catch (e) {
@@ -612,7 +612,7 @@ export function ImportSection() {
   const toggleSelect = (id) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleAll = () => {
     if (!batchData) return;
-    const nonDup = batchData.transactions.filter(t => t.status !== "duplicate").map(t => t.id);
+    const nonDup = batchData.transactions.filter(t => !t.duplicate).map(t => t.id);
     setSelected(prev => prev.size === nonDup.length ? new Set() : new Set(nonDup));
   };
 
@@ -626,8 +626,8 @@ export function ImportSection() {
     try {
       const result = await api.import.confirm({
         batch_id: batchData.batch_id,
-        selected_ids: Array.from(selected),
-        edits,
+        accepted_ids: Array.from(selected),
+        overrides: edits,
       });
       setImportResult(result);
       setStep("done");
@@ -695,8 +695,8 @@ export function ImportSection() {
           {/* Summary bar */}
           <div className="bg-[#111111] border border-white/[0.06] rounded-xl p-4 mb-4 flex flex-wrap items-center gap-4 sm:gap-6">
             <div><p className="text-white/40 text-[10px] uppercase tracking-wider">Arquivo</p><p className="text-white text-sm font-medium">{batchData.file_name}</p></div>
-            <div><p className="text-white/40 text-[10px] uppercase tracking-wider">Total</p><p className="text-white text-sm font-medium">{batchData.total_rows}</p></div>
-            <div><p className="text-white/40 text-[10px] uppercase tracking-wider">Duplicatas</p><p className="text-amber-400 text-sm font-medium">{batchData.total_duplicates}</p></div>
+            <div><p className="text-white/40 text-[10px] uppercase tracking-wider">Total</p><p className="text-white text-sm font-medium">{batchData.total_parsed}</p></div>
+            <div><p className="text-white/40 text-[10px] uppercase tracking-wider">Duplicatas</p><p className="text-amber-400 text-sm font-medium">{batchData.duplicates_count}</p></div>
             <div><p className="text-white/40 text-[10px] uppercase tracking-wider">Selecionados</p><p className="text-emerald-400 text-sm font-medium">{selected.size}</p></div>
             <div className="ml-auto flex gap-2">
               <Btn variant="secondary" onClick={reset}>Cancelar</Btn>
@@ -709,7 +709,7 @@ export function ImportSection() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/[0.06] text-white/40 text-xs">
-                  <th className="p-3 text-left w-10"><input type="checkbox" checked={selected.size === batchData.transactions.filter(t=>t.status!=="duplicate").length} onChange={toggleAll} className="accent-emerald-500" /></th>
+                  <th className="p-3 text-left w-10"><input type="checkbox" checked={selected.size === batchData.transactions.filter(t=>!t.duplicate).length} onChange={toggleAll} className="accent-emerald-500" /></th>
                   <th className="p-3 text-left">Data</th>
                   <th className="p-3 text-left">Descricao</th>
                   <th className="p-3 text-right">Valor</th>
@@ -721,30 +721,30 @@ export function ImportSection() {
               </thead>
               <tbody>
                 {batchData.transactions.map(tx => {
-                  const isDup = tx.status === "duplicate";
+                  const isDup = !!tx.duplicate;
                   const isSelected = selected.has(tx.id);
                   const userEdit = edits[tx.id] || {};
-                  const dir = userEdit.direction || tx.direction;
+                  const dir = userEdit.direction || tx.direction; // "income" | "expense"
                   const cat = userEdit.category || tx.category;
                   return (
                     <tr key={tx.id} className={`border-b border-white/[0.03] ${isDup ? "opacity-40" : isSelected ? "bg-white/[0.02]" : ""}`}>
                       <td className="p-3"><input type="checkbox" checked={isSelected} onChange={() => toggleSelect(tx.id)} disabled={isDup} className="accent-emerald-500" /></td>
-                      <td className="p-3 text-white/50 text-xs whitespace-nowrap">{fmtDate(tx.date)}</td>
-                      <td className="p-3 text-white text-xs max-w-[200px] truncate">{tx.description}</td>
-                      <td className={`p-3 text-right font-semibold text-xs whitespace-nowrap ${dir === "receita" ? "text-emerald-400" : "text-red-400"}`}>{dir === "receita" ? "+" : "-"}{fmt(tx.amount)}</td>
+                      <td className="p-3 text-white/50 text-xs whitespace-nowrap">{fmtDate(tx.transactionDate)}</td>
+                      <td className="p-3 text-white text-xs max-w-[200px] truncate" title={tx.description}>{tx.description}</td>
+                      <td className={`p-3 text-right font-semibold text-xs whitespace-nowrap ${dir === "income" ? "text-emerald-400" : "text-red-400"}`}>{dir === "income" ? "+" : "-"}{fmt(tx.amount)}</td>
                       <td className="p-3">
                         <select value={dir} onChange={e => editTx(tx.id, "direction", e.target.value)} disabled={isDup} className="bg-transparent text-xs text-white/60 border-none outline-none cursor-pointer" style={{ colorScheme: "dark" }}>
-                          <option value="receita">Receita</option>
-                          <option value="despesa">Despesa</option>
+                          <option value="income">Receita</option>
+                          <option value="expense">Despesa</option>
                         </select>
                       </td>
                       <td className="p-3">
-                        <input value={cat} onChange={e => editTx(tx.id, "category", e.target.value)} disabled={isDup} className="bg-transparent text-xs text-white/60 border-b border-white/[0.08] outline-none w-24 focus:border-white/30" />
+                        <input value={cat} onChange={e => editTx(tx.id, "category", e.target.value)} disabled={isDup} className="bg-transparent text-xs text-white/60 border-b border-white/[0.08] outline-none w-28 focus:border-white/30" />
                       </td>
-                      <td className={`p-3 text-center text-xs font-medium ${confColor(tx.confidence)}`}>{Math.round(tx.confidence * 100)}%</td>
+                      <td className={`p-3 text-center text-xs font-medium ${confColor(tx.confidenceScore || 0)}`}>{Math.round((tx.confidenceScore || 0) * 100)}%</td>
                       <td className="p-3 text-center">
-                        {isDup ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">Duplicata</span>
-                          : tx.is_recurring ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400">Recorrente</span>
+                        {isDup ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400" title={tx.duplicate_reason || ""}>Duplicata</span>
+                          : tx.needsReview ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400">Revisar</span>
                           : <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">OK</span>}
                       </td>
                     </tr>
