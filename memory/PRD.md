@@ -20,6 +20,7 @@ Clone do FinPulse - gestao financeira pessoal completa em portugues brasileiro.
   - Frontend: Modal de confirmacao "Sair" no Sidebar.
   - Frontend: pages/sections/CompartilhamentoSection.jsx + pages/AcceptInvitePage.jsx (UI base com role presets e listagem de members/invites).
   - Validado em iteration_10.json: 19/19 pytest cases PASS (security + sharing + regressao).
+  - Hotfix (19/05/2026): accept_invite + list_my_workspaces agora chamam _ensure_personal_workspace para usuarios convidados que nunca abriram o app antes. Frontend parseia 422 Pydantic em mensagem amigavel ("Email invalido"). Validado em iteration_12.json (3/3 backend + frontend Playwright PASS).
 
 
 ## File Structure
