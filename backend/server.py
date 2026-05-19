@@ -22,6 +22,7 @@ from routes import auth, categories, tags, transactions, accounts, cards, invest
 from routes import imports as imports_route
 from routes import planejamentos as planejamentos_route
 from routes import subscriptions as subscriptions_route
+from routes import workspaces as workspaces_route
 from routes.auth import get_current_user_id
 from models import User, UserSession
 from seed import seed_user_data
@@ -221,6 +222,14 @@ async def auth_session(request: Request):
 async def auth_me(request: Request):
     from routes.auth import get_current_user
     return await get_current_user(request, db=db)
+
+
+@app.get("/api/auth/validate")
+async def auth_validate(request: Request):
+    """Session validation endpoint used by frontend guard."""
+    user_id = await get_current_user_id(request, db)
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "session_version": 0})
+    return {"valid": True, "user_id": user_id, "user": user}
 
 
 @app.post("/api/auth/logout")
@@ -646,6 +655,78 @@ async def delete_subscription(sub_id: str, request: Request):
 async def charge_subscription_now(sub_id: str, request: Request):
     user_id = await get_current_user_id(request, db)
     return await subscriptions_route.charge_now(sub_id, request, db=db, user_id=user_id)
+
+
+# ============== WORKSPACE ROUTES ==============
+@app.get("/api/workspaces/me")
+async def ws_list_mine(request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await workspaces_route.list_my_workspaces(request, db=db, user_id=user_id)
+
+
+@app.get("/api/workspaces/features/flags")
+async def ws_features(request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await workspaces_route.get_feature_flags(request, db=db, user_id=user_id)
+
+
+@app.get("/api/workspaces/invites/lookup/{token}")
+async def ws_lookup_invite(token: str, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await workspaces_route.lookup_invite(token, request, db=db, user_id=user_id)
+
+
+@app.post("/api/workspaces/invites/accept/{token}")
+async def ws_accept_invite(token: str, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await workspaces_route.accept_invite(token, request, db=db, user_id=user_id)
+
+
+@app.get("/api/workspaces/{workspace_id}/members")
+async def ws_list_members(workspace_id: str, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await workspaces_route.list_members(workspace_id, request, db=db, user_id=user_id)
+
+
+@app.post("/api/workspaces/{workspace_id}/invites")
+async def ws_create_invite(workspace_id: str, data: workspaces_route.InviteCreate, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await workspaces_route.create_invite(workspace_id, data, request, db=db, user_id=user_id)
+
+
+@app.delete("/api/workspaces/{workspace_id}/invites/{invite_id}")
+async def ws_revoke_invite(workspace_id: str, invite_id: str, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await workspaces_route.revoke_invite(workspace_id, invite_id, request, db=db, user_id=user_id)
+
+
+@app.put("/api/workspaces/{workspace_id}/members/{member_id}")
+async def ws_update_member(workspace_id: str, member_id: str, data: workspaces_route.MemberUpdate, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await workspaces_route.update_member(workspace_id, member_id, data, request, db=db, user_id=user_id)
+
+
+@app.delete("/api/workspaces/{workspace_id}/members/{member_id}")
+async def ws_remove_member(workspace_id: str, member_id: str, request: Request):
+    user_id = await get_current_user_id(request, db)
+    return await workspaces_route.remove_member(workspace_id, member_id, request, db=db, user_id=user_id)
+
+
+# Bump session_version: invalidates all other sessions for this user
+@app.post("/api/auth/revoke-all-sessions")
+async def revoke_all_sessions(request: Request):
+    user_id = await get_current_user_id(request, db)
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "session_version": 1})
+    current_sv = int((user or {}).get("session_version", 0) or 0)
+    await db.users.update_one({"user_id": user_id}, {"$set": {"session_version": current_sv + 1}})
+    # Keep the calling session valid by bumping its stored version too
+    session_token = request.cookies.get("session_token") or (request.headers.get("authorization") or "").replace("Bearer ", "")
+    if session_token:
+        await db.user_sessions.update_one(
+            {"session_token": session_token, "user_id": user_id},
+            {"$set": {"session_version": current_sv + 1}},
+        )
+    return {"message": "Outras sessoes encerradas", "session_version": current_sv + 1}
 
 
 # ========== IMPORT ROUTES ==========

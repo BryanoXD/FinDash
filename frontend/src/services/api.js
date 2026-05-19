@@ -88,7 +88,10 @@ export const authAPI = {
     }),
   
   getMe: () => apiCall('/api/auth/me'),
-  
+  me: () => apiCall('/api/auth/me'),                       // alias used by Hook
+  validate: () => apiCall('/api/auth/validate'),           // session validation
+  revokeAllSessions: () => apiCall('/api/auth/revoke-all-sessions', { method: 'POST' }),
+
   logout: () =>
     apiCall('/api/auth/logout', { method: 'POST' }),
 };
@@ -375,6 +378,22 @@ export const planejamentosAPI = {
     apiCall(`/api/planejamentos/${planId}/goal`, { method: 'DELETE' }),
 };
 
+// ============== AUTH / SESSION ==============
+// (see authAPI defined at the top of this file)
+
+// ============== WORKSPACES ==============
+export const workspacesAPI = {
+  me: () => apiCall('/api/workspaces/me'),
+  featureFlags: () => apiCall('/api/workspaces/features/flags'),
+  members: (wsId) => apiCall(`/api/workspaces/${wsId}/members`),
+  invite: (wsId, data) => apiCall(`/api/workspaces/${wsId}/invites`, { method: 'POST', body: JSON.stringify(data) }),
+  revokeInvite: (wsId, invId) => apiCall(`/api/workspaces/${wsId}/invites/${invId}`, { method: 'DELETE' }),
+  updateMember: (wsId, memberId, data) => apiCall(`/api/workspaces/${wsId}/members/${memberId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  removeMember: (wsId, memberId) => apiCall(`/api/workspaces/${wsId}/members/${memberId}`, { method: 'DELETE' }),
+  lookupInvite: (token) => apiCall(`/api/workspaces/invites/lookup/${token}`),
+  acceptInvite: (token) => apiCall(`/api/workspaces/invites/accept/${token}`, { method: 'POST' }),
+};
+
 // ============== SUBSCRIPTIONS ==============
 export const subscriptionsAPI = {
   getAll: () => apiCall('/api/subscriptions'),
@@ -443,6 +462,8 @@ const api = {
   goals: goalsAPI,
   planejamentos: planejamentosAPI,
   subscriptions: subscriptionsAPI,
+  workspaces: workspacesAPI,
+  auth: authAPI,
   import: importAPI,
 };
 

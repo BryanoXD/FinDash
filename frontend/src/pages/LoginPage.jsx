@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { LayoutDashboard } from "lucide-react";
 import { authAPI } from "../services/api";
 
@@ -16,23 +16,24 @@ const GoogleIcon = () => (
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const reason = searchParams.get("reason");
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   // Check if already authenticated
   useEffect(() => {
+    if (reason) { setIsCheckingAuth(false); return; }
     const checkExistingAuth = async () => {
       try {
-        await authAPI.getMe();
-        // Already authenticated, redirect to dashboard
+        await authAPI.me();
         navigate("/dashboard", { replace: true });
       } catch (error) {
-        // Not authenticated, show login
         setIsCheckingAuth(false);
       }
     };
     checkExistingAuth();
-  }, [navigate]);
+  }, [navigate, reason]);
 
   const handleGoogleLogin = () => {
     setIsLoading(true);
@@ -105,6 +106,12 @@ export default function LoginPage() {
           <p className="text-white/50 text-sm mb-10">
             Acesse sua conta para gerenciar suas finanças
           </p>
+
+          {reason && (
+            <div data-testid="login-reason" className="mb-6 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+              <p className="text-amber-300 text-xs">{decodeURIComponent(reason)}</p>
+            </div>
+          )}
 
           {/* Google Login Button */}
           <button

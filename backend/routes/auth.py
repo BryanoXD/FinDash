@@ -101,6 +101,9 @@ async def create_session(request: Request, response: Response, db=None):
     session_doc = session.model_dump()
     session_doc["expires_at"] = session_doc["expires_at"].isoformat()
     session_doc["created_at"] = session_doc["created_at"].isoformat()
+    # Snapshot user's session_version so we can revoke later by bumping it on the user
+    user_for_sv = await db.users.find_one({"user_id": user_id}, {"_id": 0, "session_version": 1})
+    session_doc["session_version"] = int((user_for_sv or {}).get("session_version", 0) or 0)
     
     # Remove old sessions for this user
     await db.user_sessions.delete_many({"user_id": user_id})
@@ -207,5 +210,24 @@ async def get_current_user_id(request: Request, db) -> str:
     
     if expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=401, detail="Session expired")
-    
+
+    # Validate session_version against the user (revocation on password change / admin)
+    user_doc = await db.users.find_one({"user_id": session_doc["user_id"]}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="Sessao invalida: usuario nao encontrado")
+    if user_doc.get("ativo", True) is False:
+        raise HTTPException(status_code=401, detail="Conta desativada")
+    user_sv = int(user_doc.get("session_version", 0) or 0)
+    session_sv = int(session_doc.get("session_version", 0) or 0)
+    if user_sv != session_sv:
+        raise HTTPException(status_code=401, detail="Sua sessao foi encerrada por seguranca. Faca login novamente.")
+
     return session_doc["user_id"]
+
+
+@router.get("/session")
+async def validate_session(request: Request, db=None):
+    """Lightweight session validation endpoint used by the frontend guard."""
+    user_id = await get_current_user_id(request, db)
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "session_version": 0})
+    return {"valid": True, "user_id": user_id, "user": user}

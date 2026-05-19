@@ -19,8 +19,12 @@ import {
 } from "./sections/OtherSections";
 import PlanejamentosSection from "./sections/PlanejamentosSection";
 import AssinaturasSection from "./sections/AssinaturasSection";
+import CompartilhamentoSection from "./sections/CompartilhamentoSection";
+import AcceptInvitePage from "./AcceptInvitePage";
+import useSessionGuard from "../hooks/useSessionGuard";
 
 function DashboardContent() {
+  useSessionGuard({ enabled: true });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, isLoading, error } = useData();
@@ -124,6 +128,8 @@ function DashboardContent() {
           <Route path="metas" element={<MetasSection />} />
           <Route path="planejamentos" element={<PlanejamentosSection />} />
           <Route path="assinaturas" element={<AssinaturasSection />} />
+          <Route path="compartilhamento" element={<CompartilhamentoSection />} />
+          <Route path="convite/:token" element={<AcceptInvitePage />} />
           <Route path="configuracoes" element={<SettingsSection />} />
         </Routes>
       </main>

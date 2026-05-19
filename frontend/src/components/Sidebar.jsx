@@ -1,6 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { authAPI } from "../services/api";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "./ui/dialog";
 import {
   LayoutDashboard,
   TrendingUp as TrendingUpIcon,
@@ -20,6 +23,7 @@ import {
   Calculator,
   NotebookPen,
   Repeat,
+  Users2,
   X,
 } from "lucide-react";
 
@@ -38,6 +42,7 @@ const menuItems = [
   { id: "goals", label: "Metas", icon: Target, path: "/dashboard/metas" },
   { id: "subscriptions", label: "Assinaturas", icon: Repeat, path: "/dashboard/assinaturas" },
   { id: "planejamentos", label: "Planejamentos", icon: NotebookPen, path: "/dashboard/planejamentos" },
+  { id: "compartilhamento", label: "Compartilhamento", icon: Users2, path: "/dashboard/compartilhamento" },
 ];
 
 const bottomItems = [
@@ -47,21 +52,32 @@ const bottomItems = [
 export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const [logoutModal, setLogoutModal] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const isActive = (path) => {
     if (path === "/dashboard") return location.pathname === "/dashboard";
     return location.pathname.startsWith(path);
   };
 
-  const handleLogout = async () => {
+  const openLogoutConfirm = () => setLogoutModal(true);
+
+  const confirmLogout = async () => {
+    setLoggingOut(true);
     try {
       await authAPI.logout();
     } catch (e) {
       console.error('Logout error:', e);
     }
-    localStorage.removeItem("findash_auth");
-    localStorage.removeItem("findash_user");
-    navigate("/");
+    try {
+      localStorage.removeItem("findash_auth");
+      localStorage.removeItem("findash_user");
+      localStorage.removeItem("findash_workspace");
+      sessionStorage.clear();
+    } catch (_) { /* ignore */ }
+    setLoggingOut(false);
+    setLogoutModal(false);
+    navigate("/", { replace: true });
   };
 
   const handleNav = (path) => {
@@ -149,7 +165,7 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
         })}
         <button
           data-testid="sidebar-logout-btn"
-          onClick={handleLogout}
+          onClick={openLogoutConfirm}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 ${
             collapsed && !isMobile ? "justify-center" : ""
           }`}
@@ -166,6 +182,37 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
 
   return (
     <>
+      {/* Logout Confirmation Modal */}
+      <Dialog open={logoutModal} onOpenChange={(o) => !o && setLogoutModal(false)}>
+        <DialogContent className="bg-[#111111] border-white/[0.08] text-white max-w-md" data-testid="logout-modal">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <LogOut className="w-4 h-4 text-red-400" /> Sair da conta?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-white/60 text-sm py-2">
+            Tem certeza que deseja sair da sua conta? Voce precisara fazer login novamente para acessar seus dados.
+          </p>
+          <DialogFooter className="gap-2">
+            <button
+              data-testid="logout-cancel-btn"
+              onClick={() => setLogoutModal(false)}
+              className="px-4 py-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-white text-sm font-medium border border-white/[0.06]"
+            >
+              Cancelar
+            </button>
+            <button
+              data-testid="logout-confirm-btn"
+              onClick={confirmLogout}
+              disabled={loggingOut}
+              className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium disabled:opacity-50"
+            >
+              {loggingOut ? "Saindo..." : "Sair da conta"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Desktop Sidebar */}
       <aside
         className={`hidden lg:flex fixed left-0 top-0 h-screen bg-[#0a0a0a] border-r border-white/[0.06] flex-col z-50 transition-all duration-300 ${
