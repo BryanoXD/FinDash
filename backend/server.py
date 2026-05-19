@@ -65,6 +65,32 @@ async def inject_db_middleware(request: Request, call_next):
     return response
 
 
+# Cross-tenant guard: if the client sends X-Workspace-Id, the authenticated user
+# MUST be an active member of that workspace. This prevents header tampering from
+# exposing data from another user's workspace.
+_WS_GUARD_SKIP = {"/api/health", "/api/", "/api"}
+
+@app.middleware("http")
+async def workspace_header_guard(request: Request, call_next):
+    ws_hdr = (request.headers.get("x-workspace-id") or "").strip()
+    if ws_hdr and request.url.path.startswith("/api/") and request.url.path not in _WS_GUARD_SKIP:
+        try:
+            user_id = await get_current_user_id(request, db)
+        except HTTPException:
+            # Auth itself failed; let the downstream handler return the auth error.
+            return await call_next(request)
+        member = await db.workspace_members.find_one(
+            {"workspace_id": ws_hdr, "user_id": user_id, "status": "active"},
+            {"_id": 0},
+        )
+        if not member:
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Acesso negado a este workspace"},
+            )
+    return await call_next(request)
+
+
 # Dependency injection for routes
 def setup_route_dependencies():
     """Setup db injection for all route modules"""
@@ -225,8 +251,10 @@ async def auth_me(request: Request):
 
 
 @app.get("/api/auth/validate")
+@app.get("/api/auth/session")
 async def auth_validate(request: Request):
-    """Session validation endpoint used by frontend guard."""
+    """Session validation endpoint used by frontend guard. Both
+    /api/auth/validate and /api/auth/session (GET) return the same payload."""
     user_id = await get_current_user_id(request, db)
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "session_version": 0})
     return {"valid": True, "user_id": user_id, "user": user}
@@ -712,21 +740,25 @@ async def ws_remove_member(workspace_id: str, member_id: str, request: Request):
     return await workspaces_route.remove_member(workspace_id, member_id, request, db=db, user_id=user_id)
 
 
-# Bump session_version: invalidates all other sessions for this user
+# Revoke all sessions: invalidates EVERY session for this user (including the caller).
+# After this call the caller must log in again.
 @app.post("/api/auth/revoke-all-sessions")
 async def revoke_all_sessions(request: Request):
     user_id = await get_current_user_id(request, db)
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "session_version": 1})
     current_sv = int((user or {}).get("session_version", 0) or 0)
-    await db.users.update_one({"user_id": user_id}, {"$set": {"session_version": current_sv + 1}})
-    # Keep the calling session valid by bumping its stored version too
-    session_token = request.cookies.get("session_token") or (request.headers.get("authorization") or "").replace("Bearer ", "")
-    if session_token:
-        await db.user_sessions.update_one(
-            {"session_token": session_token, "user_id": user_id},
-            {"$set": {"session_version": current_sv + 1}},
-        )
-    return {"message": "Outras sessoes encerradas", "session_version": current_sv + 1}
+    new_sv = current_sv + 1
+    # Bump session_version so any leftover session token fails validation
+    await db.users.update_one({"user_id": user_id}, {"$set": {"session_version": new_sv}})
+    # Defense-in-depth: delete every session row for this user (including the caller)
+    await db.user_sessions.delete_many({"user_id": user_id})
+    # Clear the cookie on the caller's browser
+    response = JSONResponse(content={
+        "message": "Todas as sessoes foram encerradas. Faca login novamente.",
+        "session_version": new_sv,
+    })
+    response.delete_cookie(key="session_token", path="/", secure=True, samesite="none")
+    return response
 
 
 # ========== IMPORT ROUTES ==========
