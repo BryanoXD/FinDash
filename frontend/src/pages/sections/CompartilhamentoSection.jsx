@@ -86,7 +86,17 @@ export default function CompartilhamentoSection() {
       setInviteForm({ email: "", role: "viewer" });
       await reloadMembers(activeWs.workspace.id);
     } catch (e) {
-      setInviteError(e.message || "Erro ao criar convite");
+      // FastAPI 422 errors arrive as a stringified array of {type, loc, msg}.
+      // Surface just the first msg, otherwise fall back to a generic message.
+      let friendly = e.message || "Erro ao criar convite";
+      try {
+        const parsed = JSON.parse(friendly);
+        if (Array.isArray(parsed) && parsed[0]?.msg) {
+          friendly = parsed[0].msg.replace(/^Value error,\s*/, "");
+          if (parsed[0].loc?.includes("email")) friendly = "Email invalido";
+        }
+      } catch (_) { /* not JSON, keep raw message */ }
+      setInviteError(friendly);
     } finally {
       setInviteSaving(false);
     }

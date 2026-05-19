@@ -181,14 +181,14 @@ async def _log_audit(db, *, workspace_id: str, user_id: str, action: str, payloa
 # ============== ROUTES ==============
 @router.get("/me")
 async def list_my_workspaces(request: Request, db=None, user_id: str = None):
-    """List every workspace the current user belongs to."""
+    """List every workspace the current user belongs to.
+    Guarantees the user has their own personal workspace (auto-creates if missing)
+    even if their first interaction with the app was accepting an invite."""
+    # Defensive: always ensure a personal workspace exists for this user
+    await _ensure_personal_workspace(user_id, db)
     members = await db.workspace_members.find(
         {"user_id": user_id, "status": "active"}, {"_id": 0}
     ).to_list(50)
-    if not members:
-        ws = await _ensure_personal_workspace(user_id, db)
-        members = [await db.workspace_members.find_one(
-            {"workspace_id": ws["id"], "user_id": user_id}, {"_id": 0})]
     out = []
     for m in members:
         ws = await db.workspaces.find_one({"id": m["workspace_id"]}, {"_id": 0})
@@ -296,6 +296,10 @@ async def accept_invite(token: str, request: Request, db=None, user_id: str = No
     if inv.get("expires_at") and inv["expires_at"] < _now_iso():
         await db.workspace_invites.update_one({"id": inv["id"]}, {"$set": {"status": "expired"}})
         raise HTTPException(status_code=410, detail="Convite expirado")
+
+    # Always make sure the accepting user has their OWN personal workspace,
+    # even if they never opened the app before accepting the invite.
+    await _ensure_personal_workspace(user_id, db)
 
     # Block if user already member
     existing = await db.workspace_members.find_one(

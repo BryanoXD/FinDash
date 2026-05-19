@@ -1,0 +1,57 @@
+{
+  "summary": "Targeted retest of the 2 fixes left over from iteration_11. Backend FIX 1 (HIGH) + smoke regression for FLOW 4/FLOW 5 validated with 3/3 pytest cases PASS against the public preview URL (TEST_WS_FE_* direct-Mongo seed, cleaned at end). Frontend FIX 2 (MEDIUM) validated with Playwright + httpOnly cookie injection: invite modal now renders the friendly 'Email invalido' message instead of the raw Pydantic 422 array. Seeds cleaned at the end (0 leftover docs).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/workspaces/{id}/invites",
+        "issue": "Pydantic EmailStr still rejects RFC2606 reserved TLDs (.test) with a 422. Not a regression - main agent kept this behavior on purpose. The frontend now surfaces 'Email invalido' so end users no longer see raw JSON."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Invite modal",
+        "issues": [
+          "Pre-existing (iter11) - Radix Dialog still missing DialogDescription/aria-describedby; non-blocking",
+          "Pre-existing (iter11) - hydration warning: <span data-ve-dynamic> injected as a child of <select> inside Sel/FormComponents - non-blocking but pollutes console"
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter12_fixes.py",
+    "/app/test_reports/pytest/iter12_results.xml"
+  ],
+  "passed_tests": [
+    "FIX 1 (HIGH) - User B accepts invite BEFORE ever calling /api/workspaces/me; subsequent GET /api/workspaces/me returns length==2 (B's personal + A's). workspaces collection has B's personal ws (owner_user_id=B, is_personal=true, plan_type=free). workspace_members has 2 rows for B (owner of own + editor of A). All assertions green.",
+    "FIX 2 (MEDIUM) - CompartilhamentoSection invite modal: typing 'userb@findash.test' + clicking 'Criar convite' triggers 422 from backend; [data-testid=invite-error] now shows 'Email invalido' (NOT the raw '[{\"type\":\"value_error\",\"loc\":...}]' JSON). Verified no raw markers (value_error/loc/type/[{/}]) present in DOM.",
+    "REGRESSION FLOW 4 - A creates invite with valid @example.com address: POST returns 200, status=pending, role=editor, token present, no _id leak.",
+    "REGRESSION FLOW 5 - B accepts invite via POST /api/workspaces/invites/accept/{token}; response 200 with 'Convite aceito'; workspace_invites row updated to status=accepted (verified via Mongo); workspace_members row inserted active+editor for B.",
+    "Backend 422 shape - POST invite with 'userb@findash.test' returns 422 with body.detail[0].msg present and loc contains 'email' (parseable by the frontend fix)."
+  ],
+  "failed_tests": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/workspaces.py:188 - list_my_workspaces always calls _ensure_personal_workspace before listing memberships. Idempotent (find by owner+is_personal) so safe to call on every request.",
+    "routes/workspaces.py:302 - accept_invite calls _ensure_personal_workspace BEFORE the duplicate-membership check, guaranteeing the personal workspace exists even when the invited user's first API call is the accept endpoint. Correct ordering.",
+    "CompartilhamentoSection.jsx:88-100 - frontend tries JSON.parse on err.message, walks detail[0].msg and special-cases loc==='email' to 'Email invalido'. Works because authAPI throws err with the raw FastAPI body stringified. If FastAPI ever returns a {detail: '...'} string instead of an array (e.g. for HTTPException 400/403/404), the parse silently falls through and shows the raw msg - acceptable.",
+    "Pre-existing review items still apply: AcceptInvitePage does not enforce data.invite.email===currentUser.email; trash buttons (revokeInvite/removeMember) still have no data-testid (selected via title='Revogar' / 'Remover')."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter12_fixes.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (3/3 pytest cases on the targeted fixes)",
+    "frontend": "100% (FIX 2 verified - friendly error rendered, no raw JSON markers in DOM)"
+  },
+  "test_credentials": "Direct-Mongo seed of disposable users + sessions (TEST/WS_FE_* prefix). No real OAuth used.",
+  "seed_data_creation": "Backend pytest: 2 users (A/B) + sessions + 1 personal ws auto-created for A (upgraded to premium in Mongo). Cleaned in module-scoped fixture teardown. Frontend Playwright: 1 user (A) + session + 1 premium owned workspace + owner membership; deleted after assertion. Final leftover counts verified = 0.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both iteration_11 fixes are now green. Backend regression suite to keep using going forward: /app/backend/tests/test_workspaces_security.py (19 cases, iter10) + /app/backend/tests/test_iter12_fixes.py (3 cases, iter12). Frontend cookie-injection pattern: addCookies with httpOnly+secure+sameSite=None for parcel-manager-26.preview.emergentagent.com works reliably; localStorage findash_auth/findash_user must also be set via add_init_script before navigation or some pages redirect to '/'.",
+  "rca of the issue": "N/A - both fixes from iter11 confirmed effective. (1) The personal-workspace-missing bug was caused by /workspaces/me only auto-creating when the user had ZERO memberships; accept_invite inserted a membership first so the auto-create branch was skipped. Fix: _ensure_personal_workspace is now called inside accept_invite (line 302) AND inside list_my_workspaces (line 188), both checking specifically for an owned personal workspace, not just any membership. (2) The raw Pydantic 422 array was being passed through e.message because authAPI rethrows JSON.stringify(detail). Fix: sendInvite now JSON.parses the message, walks detail[0].msg and maps email-related errors to 'Email invalido'."
+}
