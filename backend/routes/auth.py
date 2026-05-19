@@ -226,8 +226,24 @@ async def get_current_user_id(request: Request, db) -> str:
 
 
 @router.get("/session")
+@router.get("/validate")
 async def validate_session(request: Request, db=None):
     """Lightweight session validation endpoint used by the frontend guard."""
     user_id = await get_current_user_id(request, db)
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "session_version": 0})
     return {"valid": True, "user_id": user_id, "user": user}
+
+
+@router.post("/revoke-all-sessions")
+async def revoke_all_sessions(request: Request, response: Response, db=None):
+    """Bump session_version on the current user, invalidating ALL active sessions
+    (including the current one). Used by 'Sair de todos os dispositivos' UI."""
+    user_id = await get_current_user_id(request, db)
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    current_sv = int((user or {}).get("session_version", 0) or 0)
+    await db.users.update_one({"user_id": user_id}, {"$set": {"session_version": current_sv + 1}})
+    # Delete all sessions for this user (defense-in-depth)
+    await db.user_sessions.delete_many({"user_id": user_id})
+    # Clear the current cookie
+    response.delete_cookie(key="session_token", path="/", secure=True, samesite="none")
+    return {"message": "Todas as sessoes foram encerradas", "session_version": current_sv + 1}

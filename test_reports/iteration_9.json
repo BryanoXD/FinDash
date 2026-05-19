@@ -1,0 +1,82 @@
+{
+  "summary": "Backend-only validation of Security & Sharing (Workspaces) feature on FinDash. Seeded two test users + sessions directly in MongoDB (Emergent OAuth bypass). 19 pytest cases executed against the public preview URL. 16 PASSED / 3 FAILED. Failures expose real gaps: (1) GET /api/auth/session alias is NOT registered (405), only /api/auth/validate is wired; (2) X-Workspace-Id header is NOT enforced by /api/transactions (and likely other resource routes) - cross-tenant access leaks; (3) POST /api/auth/revoke-all-sessions does NOT invalidate the calling session (server.py explicitly bumps the caller's session_version so /me still returns 200). Personal-workspace auto-creation, feature flags, invite create/lookup/accept/revoke, member role update/remove, owner-protection, free->premium gating all work correctly.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/auth/revoke-all-sessions",
+        "issue": "Spec requires deleting ALL user_sessions for the user and forcing relogin (so subsequent GET /api/auth/me must 401). Current server.py implementation (lines 716-729) instead BUMPS the calling session's stored session_version to match the user's new session_version, KEEPING the caller logged in and NOT deleting any session. Observed: after revoke-all-sessions, GET /api/auth/me still returns 200. The version in routes/auth.py (lines 237-249) is correct but is NOT used because routes aren't included via include_router; server.py defines an overriding @app.post that performs the wrong behavior.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "GET /api/transactions (and likely /api/cards, /api/accounts, /api/goals, /api/budgets, etc.)",
+        "issue": "X-Workspace-Id header is NOT validated by these resource routes. Sending another user's workspace_id in the header returns 200 with the caller's own data instead of 403 'Acesso negado a este workspace'. The helper get_active_workspace_id exists in routes/workspaces.py but is only referenced internally by the workspaces module - it is never invoked from transactions/cards/accounts/etc. This breaks the security model for multi-tenant sharing: a tampered header is silently ignored rather than enforced.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "GET /api/auth/session",
+        "issue": "Spec says GET /api/auth/session should be an alias of GET /api/auth/validate (the previous agent claims it was added). Currently only POST /api/auth/session exists (in server.py for creating sessions from Emergent). GET returns 405 Method Not Allowed. The @router.get('/session') decorator in routes/auth.py is never wired because routes/auth.router is not included via app.include_router.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_workspaces_security.py",
+    "/app/test_reports/pytest/iter9_results.xml"
+  ],
+  "passed_tests": [
+    "GET /api/health => 200 healthy (regression)",
+    "GET /api/auth/validate without cookie => 401 'Not authenticated'",
+    "GET /api/auth/validate with valid session cookie => 200 {valid, user_id, user} (no _id leak)",
+    "GET /api/workspaces/me auto-creates personal workspace (plan_type=free, is_personal=true) and returns [{workspace, member, is_owner:true}] with _id stripped; documents persist in Mongo",
+    "GET /api/workspaces/features/flags returns features + plan_limits for free/premium/family",
+    "POST /api/workspaces/{ws}/invites on FREE plan => 402 (Faca upgrade...); NO invite persisted",
+    "POST /api/workspaces/{ws}/invites on PREMIUM => creates pending invite with token, expires_at +7d; appears in GET /members.pending_invites",
+    "GET /api/workspaces/invites/lookup/{badtoken} => 404",
+    "GET /api/workspaces/invites/lookup/{validtoken} => {invite, workspace}",
+    "GET /api/workspaces/invites/lookup/{revokedtoken} => 410",
+    "POST /api/workspaces/invites/accept/{token} as second user => adds active member; invite => accepted",
+    "PUT /api/workspaces/{ws}/members/{id} role=editor => recalculates permissions to editor preset",
+    "PUT /api/workspaces/{ws}/members/{ownerId} => 400 'Owner nao pode ser alterado'",
+    "DELETE /api/workspaces/{ws}/invites/{id} => marks invite status=revoked",
+    "DELETE /api/workspaces/{ws}/members/{id} => marks status=revoked",
+    "DELETE /api/workspaces/{ws}/members/{ownerId} => 400 'Owner nao pode ser removido'"
+  ],
+  "failed_tests": [
+    "GET /api/auth/session => 405 (alias not wired; should mirror /validate)",
+    "GET /api/transactions with X-Workspace-Id of another user => 200 instead of expected 403",
+    "POST /api/auth/revoke-all-sessions then GET /api/auth/me => 200 instead of expected 401"
+  ],
+  "action_items": [
+    "FIX server.py /api/auth/revoke-all-sessions: replace the body so it ALSO deletes all user_sessions for the user (db.user_sessions.delete_many({user_id})) and clears the session_token cookie - mirroring the implementation already present in routes/auth.py:237-249. Currently it does the opposite (preserves the caller).",
+    "FIX server.py: add @app.get('/api/auth/session') that returns the same payload as /api/auth/validate. Frontend authAPI may already call /session expecting JSON.",
+    "FIX cross-tenant access: every resource route in server.py (transactions, cards, accounts, goals, budgets, categories, tags, financings, investments, planejamentos, subscriptions, imports) must call workspaces_route.get_active_workspace_id(request, db, user_id) and propagate ws_id, filtering Mongo queries by workspace_id. Otherwise X-Workspace-Id is a no-op and the multi-tenant security model is broken.",
+    "Code review: server.py is 754 lines doing manual route wiring and ignores include_router. Recommend using FastAPI dependencies (Depends(get_current_user_id)) and app.include_router(auth.router, prefix='/api/auth') to avoid duplicated/divergent implementations between routes/*.py and server.py - this divergence is exactly why /session alias and revoke-all-sessions behave differently than the route file states."
+  ],
+  "critical_code_review_comments": [
+    "server.py duplicates auth logic that already lives in routes/auth.py because no router is included. Two sources of truth diverged: routes/auth.py.revoke_all_sessions correctly deletes sessions; server.py.revoke_all_sessions keeps caller alive. Pick one (recommend the routes/*.py versions) and include_router.",
+    "X-Workspace-Id enforcement is documented in routes/workspaces.get_active_workspace_id but not consumed anywhere outside the workspaces module - resource endpoints have no multi-tenant guard. Without this, the workspaces feature is largely cosmetic.",
+    "PLAN_LIMITS.maxMembers for 'free' is 1, but personal workspace already counts 1 active member (owner); even if sharingEnabled were true the cap would be hit immediately. Consider maxMembers=1 meaning 'owner only' vs allowing 1 additional invite (current code treats it as total seats, which is consistent but worth documenting).",
+    "Audit log (workspace_audit) is created best-effort but has no index on workspace_id/created_at; querying will be slow at scale.",
+    "Invites store email lowercased on create but accept_invite does not verify that the accepting user's email matches inv.email - any authenticated user holding a token can claim the invite. Consider validating email match (or document this is intentional for 'invite-by-link')."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_workspaces_security.py (new)",
+    "/app/test_reports/pytest/iter9_results.xml (new)"
+  ],
+  "success_rate": {
+    "backend": "84% (16/19 pytest cases passed)",
+    "frontend": "N/A (testing_type=backend only)"
+  },
+  "test_credentials": "No real credentials available - Google OAuth cannot be intercepted. Tests seed temporary users (TEST_WS_SEC_* prefix) and sessions directly in MongoDB and cleanup in module-scope fixture teardown.",
+  "seed_data_creation": "Per-run seeds: 2 users + 2 sessions + 1 personal workspace + 1 owner member + several invites/members; ALL cleaned up after the module finishes (verified via post-run mongo count = 0).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run /app/backend/tests/test_workspaces_security.py after main agent fixes the three critical/high issues. The test file is self-contained: it seeds users/sessions in Mongo, hits the public REACT_APP_BACKEND_URL/FRONTEND_URL, and tears everything down. Failures to focus on: (1) GET /api/auth/session must return 200 JSON; (2) GET /api/transactions with X-Workspace-Id of another user must return 403; (3) revoke-all-sessions must invalidate the calling session so /me returns 401. Other 16 cases already pass and act as regression suite.",
+  "rca of the issue": "All three failures share the same root cause: routes/auth.py and routes/workspaces.py are written assuming app.include_router(...) will mount them, but server.py never calls include_router. Instead it manually re-declares every endpoint at the @app level - and the manual versions of /api/auth/session (only POST) and /api/auth/revoke-all-sessions (does not delete sessions) diverge from the more correct router-level versions. Additionally, no resource endpoint resolves the active workspace via X-Workspace-Id, so cross-tenant header tampering is silently ignored. Mitigation: include_router for auth + workspaces, and add a get_active_workspace_id dependency to every resource handler so queries filter by both user_id and workspace_id."
+}
